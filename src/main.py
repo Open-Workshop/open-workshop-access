@@ -1,8 +1,7 @@
 import logging
 
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request
 import responses.body as RespBody
-from auth import get_auth, JWTPayload, AUTH_ERROR_RESPONSES
 
 
 logger = logging.getLogger("open_workshop.access")
@@ -26,11 +25,9 @@ app = FastAPI(
     "/mod",
     summary="Get mod access permissions",
     response_model=RespBody.ModResponse,
-    responses=AUTH_ERROR_RESPONSES,
 )
 async def mod(
-    request: Request,
-    auth: JWTPayload = Depends(get_auth)
+    request: Request
 ) -> RespBody.ModResponse:
     return RespBody.ModResponse(
         info=True,
@@ -53,11 +50,9 @@ async def mod(
     "/tags",
     summary="Get tags access permissions",
     response_model=RespBody.SimpleCrudResponse,
-    responses=AUTH_ERROR_RESPONSES,
 )
 async def tags(
-    request: Request,
-    auth: JWTPayload = Depends(get_auth)
+    request: Request
 ) -> RespBody.SimpleCrudResponse:
     return RespBody.SimpleCrudResponse(
         add=True,
@@ -70,11 +65,9 @@ async def tags(
     "/genres",
     summary="Get genres access permissions",
     response_model=RespBody.SimpleCrudResponse,
-    responses=AUTH_ERROR_RESPONSES,
 )
 async def genres(
-    request: Request,
-    auth: JWTPayload = Depends(get_auth)
+    request: Request
 ) -> RespBody.SimpleCrudResponse:
     return RespBody.SimpleCrudResponse(
         add=True,
@@ -87,11 +80,9 @@ async def genres(
     "/game",
     summary="Get game access permissions",
     response_model=RespBody.GameResponse,
-    responses=AUTH_ERROR_RESPONSES,
 )
 async def game(
-    request: Request,
-    auth: JWTPayload = Depends(get_auth)
+    request: Request
 ) -> RespBody.GameResponse:
     return RespBody.GameResponse(
         edit=RespBody.GameEditResponse(
@@ -110,11 +101,9 @@ async def game(
     "/profile",
     summary="Get profile access permissions",
     response_model=RespBody.ProfileResponse,
-    responses=AUTH_ERROR_RESPONSES,
 )
 async def profile(
-    request: Request,
-    auth: JWTPayload = Depends(get_auth)
+    request: Request
 ) -> RespBody.ProfileResponse:
     return RespBody.ProfileResponse(
         info=RespBody.ProfileInfoResponse(

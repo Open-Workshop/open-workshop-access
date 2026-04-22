@@ -46,9 +46,13 @@ def _mod_entry_by_id(context: AccessState, mod_id: int) -> AccessModEntry | None
 def _crud_response(context: AccessState) -> RespBody.SimpleCrudResponse:
     can_manage = bool(context.admin)
     admin_right = RespBody.BaseRight(
-        can_manage,
-        "Администратор может выполнять действие" if can_manage else "Требуются права администратора",
-        "admin" if can_manage else "forbidden",
+        value=can_manage,
+        reason=(
+            "Администратор может выполнять действие"
+            if can_manage
+            else "Требуются права администратора"
+        ),
+        reason_code="admin" if can_manage else "forbidden",
     )
     return RespBody.SimpleCrudResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
@@ -112,9 +116,9 @@ async def mod_add(
     return RespBody.ModAddResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
         add=RespBody.BaseRight(
-            can_add,
-            add_reason,
-            add_reason_code,
+            value=can_add,
+            reason=add_reason,
+            reason_code=add_reason_code,
         ),
     )
 
@@ -192,17 +196,17 @@ async def mod(
         edit_reason = "Вы в муте"
 
     edit_right = RespBody.BaseRight(
-        can_edit,
-        edit_reason,
-        "edit" if can_edit else "forbidden",
+        value=can_edit,
+        reason=edit_reason,
+        reason_code="edit" if can_edit else "forbidden",
     )
 
     return RespBody.ModResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
         info=RespBody.BaseRight(
-            can_read,
-            "Мод доступен для просмотра" if can_read else "Мод скрыт",
-            "public" if can_read else "hidden",
+            value=can_read,
+            reason="Мод доступен для просмотра" if can_read else "Мод скрыт",
+            reason_code="public" if can_read else "hidden",
         ),
         edit=RespBody.ModEditResponse(
             title=edit_right,
@@ -211,24 +215,26 @@ async def mod(
             screenshots=edit_right,
             new_version=edit_right,
             authors=RespBody.BaseRight(
-                can_manage_authors,
-                "Можно управлять авторами"
-                if can_manage_authors
-                else "Управление авторами недоступно",
-                "authors" if can_manage_authors else "forbidden",
+                value=can_manage_authors,
+                reason=(
+                    "Можно управлять авторами"
+                    if can_manage_authors
+                    else "Управление авторами недоступно"
+                ),
+                reason_code="authors" if can_manage_authors else "forbidden",
             ),
             tags=edit_right,
             dependencies=edit_right,
         ),
         delete=RespBody.BaseRight(
-            can_delete,
-            "Можно удалить мод" if can_delete else "Удаление недоступно",
-            "delete" if can_delete else "forbidden",
+            value=can_delete,
+            reason="Можно удалить мод" if can_delete else "Удаление недоступно",
+            reason_code="delete" if can_delete else "forbidden",
         ),
         download=RespBody.BaseRight(
-            can_read,
-            "Мод можно скачать" if can_read else "Скачивание скрыто",
-            "public" if can_read else "hidden",
+            value=can_read,
+            reason="Мод можно скачать" if can_read else "Скачивание скрыто",
+            reason_code="public" if can_read else "hidden",
         ),
     )
 
@@ -327,11 +333,13 @@ async def game_add(
     return RespBody.GameAddResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
         add=RespBody.BaseRight(
-            can_manage,
-            "Администратор может добавлять игры"
-            if can_manage
-            else "Требуются права администратора",
-            "admin" if can_manage else "forbidden",
+            value=can_manage,
+            reason=(
+                "Администратор может добавлять игры"
+                if can_manage
+                else "Требуются права администратора"
+            ),
+            reason_code="admin" if can_manage else "forbidden",
         ),
     )
 
@@ -344,15 +352,19 @@ async def game_add(
 )
 async def game(
     request: Request,
-    _game_id: int = Path(..., description="ID игры/приложения"),
+    game_id: int = Path(..., description="ID игры/приложения"),
     _: None = Depends(require_service_token),
 ) -> RespBody.GameResponse:
     context = await fetch_manager_context(request)
     can_manage = bool(context.admin)
     game_right = RespBody.BaseRight(
-        can_manage,
-        "Администратор может менять игру" if can_manage else "Требуются права администратора",
-        "admin" if can_manage else "forbidden",
+        value=can_manage,
+        reason=(
+            "Администратор может менять игру"
+            if can_manage
+            else "Требуются права администратора"
+        ),
+        reason_code="admin" if can_manage else "forbidden",
     )
     return RespBody.GameResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
@@ -365,9 +377,13 @@ async def game(
             genres=game_right,
         ),
         delete=RespBody.BaseRight(
-            can_manage,
-            "Администратор может удалять игру" if can_manage else "Требуются права администратора",
-            "admin" if can_manage else "forbidden",
+            value=can_manage,
+            reason=(
+                "Администратор может удалять игру"
+                if can_manage
+                else "Требуются права администратора"
+            ),
+            reason_code="admin" if can_manage else "forbidden",
         ),
     )
 
@@ -398,65 +414,123 @@ async def profile(
         or (is_self and context.change_username and not muted and not username_on_cooldown)
     )
     if is_admin:
-        nickname_right = RespBody.BaseRight(True, "Администратор может менять никнейм", "admin")
+        nickname_right = RespBody.BaseRight(
+            value=True,
+            reason="Администратор может менять никнейм",
+            reason_code="admin",
+        )
     elif is_self and context.change_username and not muted and not username_on_cooldown:
-        nickname_right = RespBody.BaseRight(True, "Можно менять собственный никнейм", "self")
+        nickname_right = RespBody.BaseRight(
+            value=True,
+            reason="Можно менять собственный никнейм",
+            reason_code="self",
+        )
     elif muted and is_self and context.change_username:
-        nickname_right = RespBody.BaseRight(False, "Вы в муте", "muted")
+        nickname_right = RespBody.BaseRight(
+            value=False,
+            reason="Вы в муте",
+            reason_code="muted",
+        )
     elif username_on_cooldown and is_self and context.change_username:
-        nickname_right = RespBody.BaseRight(False, "Никнейм пока нельзя менять", "cooldown")
+        nickname_right = RespBody.BaseRight(
+            value=False,
+            reason="Никнейм пока нельзя менять",
+            reason_code="cooldown",
+        )
     else:
-        nickname_right = RespBody.BaseRight(False, "Изменение никнейма недоступно", "forbidden")
+        nickname_right = RespBody.BaseRight(
+            value=False,
+            reason="Изменение никнейма недоступно",
+            reason_code="forbidden",
+        )
 
     can_change_description = bool(is_admin or (is_self and context.change_about and not muted))
     if is_admin:
-        description_right = RespBody.BaseRight(True, "Администратор может менять описание", "admin")
+        description_right = RespBody.BaseRight(
+            value=True,
+            reason="Администратор может менять описание",
+            reason_code="admin",
+        )
     elif is_self and context.change_about and not muted:
-        description_right = RespBody.BaseRight(True, "Можно менять собственное описание", "self")
+        description_right = RespBody.BaseRight(
+            value=True,
+            reason="Можно менять собственное описание",
+            reason_code="self",
+        )
     elif muted and is_self and context.change_about:
-        description_right = RespBody.BaseRight(False, "Вы в муте", "muted")
+        description_right = RespBody.BaseRight(
+            value=False,
+            reason="Вы в муте",
+            reason_code="muted",
+        )
     else:
-        description_right = RespBody.BaseRight(False, "Изменение описания недоступно", "forbidden")
+        description_right = RespBody.BaseRight(
+            value=False,
+            reason="Изменение описания недоступно",
+            reason_code="forbidden",
+        )
 
     can_change_avatar = bool(is_admin or (is_self and context.change_avatar and not muted))
     if is_admin:
-        avatar_right = RespBody.BaseRight(True, "Администратор может менять аватар", "admin")
+        avatar_right = RespBody.BaseRight(
+            value=True,
+            reason="Администратор может менять аватар",
+            reason_code="admin",
+        )
     elif is_self and context.change_avatar and not muted:
-        avatar_right = RespBody.BaseRight(True, "Можно менять собственный аватар", "self")
+        avatar_right = RespBody.BaseRight(
+            value=True,
+            reason="Можно менять собственный аватар",
+            reason_code="self",
+        )
     elif muted and is_self and context.change_avatar:
-        avatar_right = RespBody.BaseRight(False, "Вы в муте", "muted")
+        avatar_right = RespBody.BaseRight(
+            value=False,
+            reason="Вы в муте",
+            reason_code="muted",
+        )
     else:
-        avatar_right = RespBody.BaseRight(False, "Изменение аватара недоступно", "forbidden")
+        avatar_right = RespBody.BaseRight(
+            value=False,
+            reason="Изменение аватара недоступно",
+            reason_code="forbidden",
+        )
 
     can_vote_for_reputation = bool(context.vote_for_reputation and not muted)
     vote_right = RespBody.BaseRight(
-        can_vote_for_reputation,
-        "Голосование за репутацию доступно"
-        if can_vote_for_reputation
-        else "Вы в муте"
-        if muted
-        else "Голосование за репутацию недоступно",
-        "allowed" if can_vote_for_reputation else "muted" if muted else "forbidden",
+        value=can_vote_for_reputation,
+        reason=(
+            "Голосование за репутацию доступно"
+            if can_vote_for_reputation
+            else "Вы в муте"
+            if muted
+            else "Голосование за репутацию недоступно"
+        ),
+        reason_code="allowed" if can_vote_for_reputation else "muted" if muted else "forbidden",
     )
     can_write_comments = bool(context.write_comments and not muted)
     comments_right = RespBody.BaseRight(
-        can_write_comments,
-        "Комментирование доступно"
-        if can_write_comments
-        else "Вы в муте"
-        if muted
-        else "Комментирование недоступно",
-        "allowed" if can_write_comments else "muted" if muted else "forbidden",
+        value=can_write_comments,
+        reason=(
+            "Комментирование доступно"
+            if can_write_comments
+            else "Вы в муте"
+            if muted
+            else "Комментирование недоступно"
+        ),
+        reason_code="allowed" if can_write_comments else "muted" if muted else "forbidden",
     )
     can_set_reactions = bool(context.set_reactions and not muted)
     reactions_right = RespBody.BaseRight(
-        can_set_reactions,
-        "Реакции доступны"
-        if can_set_reactions
-        else "Вы в муте"
-        if muted
-        else "Реакции недоступны",
-        "allowed" if can_set_reactions else "muted" if muted else "forbidden",
+        value=can_set_reactions,
+        reason=(
+            "Реакции доступны"
+            if can_set_reactions
+            else "Вы в муте"
+            if muted
+            else "Реакции недоступны"
+        ),
+        reason_code="allowed" if can_set_reactions else "muted" if muted else "forbidden",
     )
 
     return RespBody.ProfileResponse(
@@ -470,43 +544,49 @@ async def profile(
             exclude_none=True,
         ),
         info=RespBody.ProfileInfoResponse(
-            public=RespBody.BaseRight(True, "Профиль доступен для просмотра", "public"),
+            public=RespBody.BaseRight(
+                value=True,
+                reason="Профиль доступен для просмотра",
+                reason_code="public",
+            ),
             meta=RespBody.BaseRight(
-                is_admin or is_self,
-                "Это ваш профиль"
-                if is_self
-                else "Вы администратор"
-                if is_admin
-                else "Скрытая информация недоступна",
-                "self" if is_self else "admin" if is_admin else "forbidden",
+                value=is_admin or is_self,
+                reason=(
+                    "Это ваш профиль"
+                    if is_self
+                    else "Вы администратор"
+                    if is_admin
+                    else "Скрытая информация недоступна"
+                ),
+                reason_code="self" if is_self else "admin" if is_admin else "forbidden",
             ),
         ),
         edit=RespBody.ProfileEditResponse(
             nickname=nickname_right,
             grade=RespBody.BaseRight(
-                is_admin,
-                "Администратор может менять грейд",
-                "admin" if is_admin else "forbidden",
+                value=is_admin,
+                reason="Администратор может менять грейд",
+                reason_code="admin" if is_admin else "forbidden",
             ),
             description=description_right,
             avatar=avatar_right,
             mute=RespBody.BaseRight(
-                is_admin and not is_self,
-                "Администратор может назначать мут",
-                "admin" if is_admin and not is_self else "forbidden",
+                value=is_admin and not is_self,
+                reason="Администратор может назначать мут",
+                reason_code="admin" if is_admin and not is_self else "forbidden",
             ),
             rights=RespBody.BaseRight(
-                is_admin,
-                "Только администратор может менять права",
-                "admin" if is_admin else "forbidden",
+                value=is_admin,
+                reason="Только администратор может менять права",
+                reason_code="admin" if is_admin else "forbidden",
             ),
         ),
         vote_for_reputation=vote_right,
         write_comments=comments_right,
         set_reactions=reactions_right,
         delete=RespBody.BaseRight(
-            is_self,
-            "Удалять можно только свой профиль",
-            "self" if is_self else "forbidden",
+            value=is_self,
+            reason="Удалять можно только свой профиль",
+            reason_code="self" if is_self else "forbidden",
         ),
     )

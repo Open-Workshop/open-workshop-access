@@ -16,6 +16,7 @@ ACCESS_MOD_ENTRY_EXAMPLE = {
 
 ACCESS_CONTEXT_EXAMPLE = {
     "authenticated": True,
+    "owner_id": 7,
     "login_method": "password",
     "mute_until": "2026-02-07T18:20:45",
     "last_username_reset": "2026-02-07T18:20:45",
@@ -26,7 +27,6 @@ ACCESS_CONTEXT_EXAMPLE = {
 
 ACCESS_STATE_EXAMPLE = {
     **ACCESS_CONTEXT_EXAMPLE,
-    "owner_id": 7,
     "admin": False,
     "write_comments": True,
     "set_reactions": True,
@@ -53,6 +53,7 @@ ACCESS_STATE_EXAMPLE = {
 
 ACCESS_PUBLIC_CONTEXT_FIELDS: tuple[str, ...] = (
     "authenticated",
+    "owner_id",
     "login_method",
     "mute_until",
     "last_username_reset",
@@ -91,6 +92,7 @@ class AccessContext(AccessModel):
     )
 
     authenticated: bool = False
+    owner_id: int = -1
     login_method: str | None = None
 
     mute_until: datetime | None = None
@@ -108,7 +110,6 @@ class AccessState(AccessContext):
         json_schema_extra={"example": ACCESS_STATE_EXAMPLE},
     )
 
-    owner_id: int = -1
     admin: bool = False
     write_comments: bool = False
     set_reactions: bool = False

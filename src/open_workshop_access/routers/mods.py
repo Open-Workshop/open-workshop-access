@@ -59,8 +59,6 @@ def _mod_response(
             if not muted:
                 if mod_entry.owner:
                     can_edit = bool(context.change_self_mods)
-                elif mod_entry.member or mod_entry.public > 1:
-                    can_edit = False
                 else:
                     can_edit = bool(context.change_mods)
 
@@ -87,13 +85,17 @@ def _mod_response(
                 else:
                     can_delete = bool(context.delete_mods)
 
-    edit_reason = "Администратор имеет доступ" if is_admin else "Доступ к модификации ограничен"
-    if mod_entry is not None and mod_entry.owner:
-        edit_reason = "Можно редактировать свой мод"
-    elif mod_entry is not None and not mod_entry.owner and not mod_entry.member and mod_entry.public <= 1:
-        edit_reason = "Можно редактировать публичный мод"
-    elif muted:
+    edit_reason = "Администратор имеет доступ" if is_admin else "Изменение мода недоступно"
+    if muted:
         edit_reason = "Вы в муте"
+    elif mod_entry is not None and can_edit:
+        edit_reason = (
+            "Можно редактировать свой мод"
+            if mod_entry.owner
+            else "Можно редактировать чужой мод"
+        )
+    elif mod_entry is not None and mod_entry.owner:
+        edit_reason = "Редактирование своего мода недоступно"
 
     edit_right = BaseRight(
         value=can_edit,
@@ -226,4 +228,9 @@ async def mods(
         mod_ids=payload.mods_ids,
     )
     ids = list(dict.fromkeys(int(mod_id) for mod_id in payload.mods_ids))
-    return {mod_id: _mod_response(context, mod_id) for mod_id in ids}
+    mod_payload = (
+        ModRequest(author_id=payload.author_id, mode=payload.mode)
+        if payload.author_id is not None or payload.mode is not None
+        else None
+    )
+    return {mod_id: _mod_response(context, mod_id, mod_payload) for mod_id in ids}

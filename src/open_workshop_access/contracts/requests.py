@@ -20,3 +20,5 @@ class ModsRequest(AccessModel):
     )
 
     mods_ids: list[int]
+    author_id: int | None = None
+    mode: bool | None = None

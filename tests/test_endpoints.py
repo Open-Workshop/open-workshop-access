@@ -71,7 +71,6 @@ def make_mod(
 
 
 INTERNAL_STATE_FIELDS = (
-    "owner_id",
     "admin",
     "create_reactions",
     "mute_users",
@@ -122,6 +121,7 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["authenticated"])
+        self.assertEqual(body["owner_id"], 11)
         self.assertEqual(body["login_method"], "password")
         for leaked_field in INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS:
             self.assertNotIn(leaked_field, body)
@@ -264,6 +264,43 @@ class AccessEndpointTests(unittest.TestCase):
             for leaked_field in INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS:
                 self.assertNotIn(leaked_field, mod_body)
         self.assertEqual(fetch_mock.await_args.kwargs, {"mod_ids": [1, 2, 3]})
+
+    def test_mod_access_is_not_tied_to_visibility(self) -> None:
+        context = make_context(
+            change_mods=True,
+            mods=[make_mod(9, public=2)],
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("POST", "/mod/9", json={})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["info"]["value"])
+        self.assertTrue(body["edit"]["title"]["value"])
+        self.assertEqual(body["edit"]["title"]["reason_code"], "edit")
+
+    def test_mods_batch_accepts_optional_author_context(self) -> None:
+        context = make_context(
+            owner_id=7,
+            change_authorship_mods=False,
+            mods=[
+                make_mod(1, owner=True),
+                make_mod(2, member=True),
+            ],
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request(
+                "POST",
+                "/mods",
+                json={"mods_ids": [1, 2], "author_id": 7, "mode": False},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["1"]["edit"]["authors"]["value"])
+        self.assertTrue(body["2"]["edit"]["authors"]["value"])
 
     def test_tags_and_genres_return_admin_crud_rights(self) -> None:
         context = make_context(admin=True)

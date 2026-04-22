@@ -87,7 +87,7 @@ class AccessEndpointTests(unittest.TestCase):
             method,
             path,
             json=json,
-            headers={"x-token": "test-token"},
+            headers={"Authorization": "Bearer test-token"},
         )
 
     def test_context_returns_manager_context(self) -> None:
@@ -95,23 +95,37 @@ class AccessEndpointTests(unittest.TestCase):
         fetch_mock = AsyncMock(return_value=context)
 
         with patch.object(manager_client, "fetch_manager_context", fetch_mock):
-            response = self.request("POST", "/context", json={"user_id": 11})
+            response = self.request("POST", "/context")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["owner_id"], 11)
         self.assertTrue(response.json()["publish_mods"])
-        self.assertEqual(fetch_mock.await_args.kwargs, {"user_id": 11})
+        self.assertEqual(fetch_mock.await_args.kwargs, {})
 
-    def test_mod_add_requires_admin_for_without_author(self) -> None:
+    def test_mod_add_returns_anonymous_add_right(self) -> None:
         context = make_context(publish_mods=True)
 
         with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
-            response = self.request("PUT", "/mod", json={"without_author": True})
+            response = self.request("PUT", "/mod")
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertFalse(body["add"]["value"])
-        self.assertEqual(body["add"]["reason_code"], "admin_required")
+        self.assertTrue(body["add"]["value"])
+        self.assertFalse(body["anonymous_add"]["value"])
+        self.assertEqual(body["add"]["reason_code"], "allowed")
+        self.assertEqual(body["anonymous_add"]["reason_code"], "admin_required")
+
+    def test_mod_add_allows_anonymous_add_for_admin(self) -> None:
+        context = make_context(admin=True)
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("PUT", "/mod")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["add"]["value"])
+        self.assertTrue(body["anonymous_add"]["value"])
+        self.assertEqual(body["anonymous_add"]["reason_code"], "admin")
 
     def test_mod_access_returns_owner_and_author_rules(self) -> None:
         context = make_context(
@@ -148,12 +162,12 @@ class AccessEndpointTests(unittest.TestCase):
             response = self.request(
                 "POST",
                 "/mods",
-                json={"user_id": 12, "mods_ids": [1, 2, 3], "edit": True},
+                json={"mods_ids": [1, 2, 3], "edit": True},
             )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["allowed_ids"], [1])
-        self.assertEqual(fetch_mock.await_args.kwargs, {"user_id": 12, "mod_ids": [1, 2, 3]})
+        self.assertEqual(fetch_mock.await_args.kwargs, {"mod_ids": [1, 2, 3]})
 
     def test_tags_and_genres_return_admin_crud_rights(self) -> None:
         context = make_context(admin=True)
@@ -259,7 +273,7 @@ class AccessEndpointTests(unittest.TestCase):
             "fetch_manager_context",
             AsyncMock(return_value=make_context()),
         ):
-            response = self.client.post("/context", json={"user_id": 7})
+            response = self.client.post("/context")
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["detail"], "Access denied")

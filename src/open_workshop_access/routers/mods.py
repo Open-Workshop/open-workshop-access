@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Path, Request
 
 from open_workshop_access import manager_client
 from open_workshop_access.auth import require_service_token
-from open_workshop_access.contracts.requests import ModAddRequest, ModRequest, ModsRequest
+from open_workshop_access.contracts.requests import ModRequest, ModsRequest
 from open_workshop_access.contracts.responses import (
     BaseRight,
     ModAddResponse,
@@ -41,7 +41,6 @@ def _mod_entry_by_id(context: AccessState, mod_id: int) -> AccessModEntry | None
 )
 async def mod_add(
     request: Request,
-    payload: ModAddRequest,
 ) -> ModAddResponse:
     context = await manager_client.fetch_manager_context(request)
     muted = _is_muted(context)
@@ -49,15 +48,18 @@ async def mod_add(
     can_add = False
     add_reason = "Требуется авторизация"
     add_reason_code = "unauthorized"
+    can_add_anonymous = False
+    anonymous_add_reason = "Требуется авторизация"
+    anonymous_add_reason_code = "unauthorized"
 
     if context.authenticated and context.owner_id >= 0:
         if context.admin:
             can_add = True
             add_reason = "Администратор может публиковать моды"
             add_reason_code = "admin"
-        elif payload.without_author:
-            add_reason = "Публикация без автора доступна только администратору"
-            add_reason_code = "admin_required"
+            can_add_anonymous = True
+            anonymous_add_reason = "Администратор может публиковать моды без автора"
+            anonymous_add_reason_code = "admin"
         elif muted:
             add_reason = "Вы в муте"
             add_reason_code = "muted"
@@ -68,6 +70,9 @@ async def mod_add(
         else:
             add_reason = "Публикация модов недоступна"
             add_reason_code = "forbidden"
+        if not context.admin:
+            anonymous_add_reason = "Публикация без автора доступна только администратору"
+            anonymous_add_reason_code = "admin_required"
 
     return ModAddResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
@@ -75,6 +80,11 @@ async def mod_add(
             value=can_add,
             reason=add_reason,
             reason_code=add_reason_code,
+        ),
+        anonymous_add=BaseRight(
+            value=can_add_anonymous,
+            reason=anonymous_add_reason,
+            reason_code=anonymous_add_reason_code,
         ),
     )
 
@@ -202,7 +212,6 @@ async def mods(
 ) -> ModsResponse:
     context = await manager_client.fetch_manager_context(
         request,
-        user_id=payload.user_id,
         mod_ids=payload.mods_ids,
     )
     ids = list(dict.fromkeys(int(mod_id) for mod_id in payload.mods_ids))
@@ -238,4 +247,3 @@ async def mods(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
         allowed_ids=allowed_ids,
     )
-

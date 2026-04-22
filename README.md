@@ -5,7 +5,7 @@
 Он не хранит собственное состояние сессии и не ходит напрямую в базы manager. Вместо этого сервис:
 
 1. принимает запрос от `open-workshop-manager`,
-2. проверяет сервисный токен в заголовке `x-token`,
+2. проверяет сервисный токен в заголовке `Authorization: Bearer ...`,
 3. по кукам `accessToken` и `refreshToken` запрашивает у manager доверенный статический контекст,
 4. собирает и возвращает контракт прав для конкретной ручки.
 
@@ -76,10 +76,10 @@ tests/
 Есть два разных токена, и у них разная роль:
 
 - `ACCESS_SERVICE_TOKEN`
-  Используется manager -> access. Передаётся в заголовке `x-token`.
+  Используется manager -> access. Передаётся в заголовке `Authorization: Bearer ...`.
 
 - `ACCESS_CALLBACK_TOKEN`
-  Используется access -> manager callback. Передаётся в заголовке `x-token`.
+  Используется access -> manager callback. Передаётся в заголовке `Authorization: Bearer ...`.
 
 Пользовательские токены в body не передаются.
 
@@ -133,7 +133,7 @@ GET /
 
 Любой запрос в access должен содержать:
 
-- заголовок `x-token: <ACCESS_SERVICE_TOKEN>`
+- заголовок `Authorization: Bearer <ACCESS_SERVICE_TOKEN>`
 - при пользовательском сценарии куки `accessToken` и `refreshToken`
 
 ### Callback в manager
@@ -146,11 +146,9 @@ POST {MANAGER_URL}/access/callback/context
 
 С этим запросом отправляются:
 
-- заголовок `x-token: <ACCESS_CALLBACK_TOKEN>`
+- заголовок `Authorization: Bearer <ACCESS_CALLBACK_TOKEN>`
 - куки `accessToken` и `refreshToken`, если они были в исходном запросе
-- body только с нужными идентификаторами:
-  - `user_id`
-  - `mods_ids`
+- body только с `mods_ids`, если access дополнительно запрашивает данные по модам
 
 Это важно: access не тащит в body лишние поля “на всякий случай”.
 
@@ -160,29 +158,22 @@ POST {MANAGER_URL}/access/callback/context
 
 ### `POST /context`
 
-Возвращает текущий статический контекст доступа.
+Возвращает текущий контекст доступа активной сессии.
 
-Body:
+Ручка не принимает body и всегда работает по активным кукам `accessToken` и `refreshToken`.
 
-```json
-{
-  "user_id": 15
-}
-```
-
-`user_id` нужен только для статичных сценариев, когда manager хочет посчитать права для конкретного пользователя без текущей сессии.
+Она нужна manager'у, когда требуется получить актуальный snapshot прав текущего пользователя без передачи отдельного идентификатора.
 
 ### `PUT /mod`
 
 Возвращает права на создание мода.
 
-Body:
+Ответ содержит два независимых права:
 
-```json
-{
-  "without_author": false
-}
-```
+- `add` - обычная публикация мода
+- `anonymous_add` - публикация мода без автора
+
+Body не требуется.
 
 ### `POST /mod/{mod_id}`
 
@@ -207,13 +198,12 @@ Body:
 
 ```json
 {
-  "user_id": 15,
   "mods_ids": [1, 2, 3],
   "edit": true
 }
 ```
 
-`user_id` используется в статичном сценарии, когда проверка идёт без пользовательских кук.
+Проверка идёт по активной сессии, а `mods_ids` нужен только чтобы вернуть права по конкретному набору модов.
 
 ### `PATCH /tags`
 
@@ -260,7 +250,7 @@ Body не требуется.
 
 ```bash
 curl -X POST "http://127.0.0.1:8080/profile/7" \
-  -H "x-token: dev-access-token" \
+  -H "Authorization: Bearer dev-access-token" \
   -H "Content-Type: application/json" \
   -H "Cookie: accessToken=...; refreshToken=..." \
   -d '{}'
@@ -270,7 +260,7 @@ curl -X POST "http://127.0.0.1:8080/profile/7" \
 
 В репозитории есть endpoint-тесты ручек access:
 
-- проверка `x-token`
+- проверка `Authorization`
 - `context`
 - `mod add`
 - `mod`

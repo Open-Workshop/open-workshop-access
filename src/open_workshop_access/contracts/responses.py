@@ -31,6 +31,7 @@ class ModResponse(AccessState):
 
 class ModAddResponse(AccessState):
     add: BaseRight
+    anonymous_add: BaseRight
 
 
 class ModsResponse(AccessState):
@@ -82,4 +83,3 @@ class ProfileResponse(AccessState):
     write_comments: BaseRight
     set_reactions: BaseRight
     delete: BaseRight
-

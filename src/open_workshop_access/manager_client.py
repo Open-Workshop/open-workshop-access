@@ -38,29 +38,26 @@ def _normalize_mod_ids(mod_ids: list[int] | int | None) -> list[int]:
 async def fetch_manager_context(
     request: Request,
     *,
-    user_id: int | None = None,
     mod_ids: list[int] | int | None = None,
 ) -> AccessState:
-    body: dict[str, object] = {}
-    if user_id is not None:
-        body["user_id"] = user_id
-
+    body: dict[str, object] | None = None
     normalized_mod_ids = _normalize_mod_ids(mod_ids)
     if normalized_mod_ids:
-        body["mods_ids"] = normalized_mod_ids
+        body = {"mods_ids": normalized_mod_ids}
 
     url = config.MANAGER_URL.rstrip("/") + "/access/callback/context"
-    headers = {"x-token": config.ACCESS_CALLBACK_TOKEN}
+    headers = {"Authorization": f"Bearer {config.ACCESS_CALLBACK_TOKEN}"}
     timeout = httpx.Timeout(float(config.REQUEST_TIMEOUT_SECONDS))
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                url,
-                json=body,
-                headers=headers,
-                cookies=_session_cookies(request),
-            )
+            post_kwargs: dict[str, object] = {
+                "headers": headers,
+                "cookies": _session_cookies(request),
+            }
+            if body is not None:
+                post_kwargs["json"] = body
+            response = await client.post(url, **post_kwargs)
     except httpx.HTTPError as exc:  # pragma: no cover - network failure
         raise ManagerCallbackError(f"Manager callback failed: {exc}") from exc
 
@@ -76,4 +73,3 @@ async def fetch_manager_context(
         raise ManagerCallbackError("Manager callback returned invalid JSON") from exc
 
     return AccessState.model_validate(data)
-

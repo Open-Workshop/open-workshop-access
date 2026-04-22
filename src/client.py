@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
-
 import httpx
+from fastapi import Request
 
-from . import settings as config
-from .schemas import AccessRequest, AccessState
+import settings as config
+from schemas import AccessState
 
 
 class ManagerCallbackError(RuntimeError):
@@ -14,11 +13,41 @@ class ManagerCallbackError(RuntimeError):
         self.status_code = status_code
 
 
-async def fetch_manager_context(payload: AccessRequest | dict[str, Any]) -> AccessState:
-    if isinstance(payload, AccessRequest):
-        body = payload.model_dump(exclude_none=True)
-    else:
-        body = {key: value for key, value in payload.items() if value is not None}
+def _session_cookies(request: Request) -> dict[str, str]:
+    cookies: dict[str, str] = {}
+
+    access_token = request.cookies.get("accessToken", "")
+    if access_token:
+        cookies["accessToken"] = access_token
+
+    refresh_token = request.cookies.get("refreshToken", "")
+    if refresh_token:
+        cookies["refreshToken"] = refresh_token
+
+    return cookies
+
+
+def _normalize_mod_ids(mod_ids: list[int] | int | None) -> list[int]:
+    if mod_ids is None:
+        return []
+    if isinstance(mod_ids, int):
+        return [mod_ids]
+    return [int(mod_id) for mod_id in mod_ids]
+
+
+async def fetch_manager_context(
+    request: Request,
+    *,
+    user_id: int | None = None,
+    mod_ids: list[int] | int | None = None,
+) -> AccessState:
+    body: dict[str, object] = {}
+    if user_id is not None:
+        body["user_id"] = user_id
+
+    normalized_mod_ids = _normalize_mod_ids(mod_ids)
+    if normalized_mod_ids:
+        body["mods_ids"] = normalized_mod_ids
 
     url = config.MANAGER_URL.rstrip("/") + "/access/callback/context"
     headers = {"x-token": config.ACCESS_CALLBACK_TOKEN}
@@ -26,7 +55,12 @@ async def fetch_manager_context(payload: AccessRequest | dict[str, Any]) -> Acce
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=body, headers=headers)
+            response = await client.post(
+                url,
+                json=body,
+                headers=headers,
+                cookies=_session_cookies(request),
+            )
     except httpx.HTTPError as exc:  # pragma: no cover - network failure
         raise ManagerCallbackError(f"Manager callback failed: {exc}") from exc
 

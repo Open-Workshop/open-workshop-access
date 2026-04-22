@@ -3,12 +3,19 @@ from __future__ import annotations
 import datetime
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException, Path, status
+from fastapi import Depends, FastAPI, HTTPException, Path, Request, status
 
 import responses.body as RespBody
 from auth import require_service_token
 from client import fetch_manager_context
-from schemas import AccessModEntry, AccessRequest, AccessState
+from schemas import (
+    AccessModEntry,
+    AccessState,
+    ContextRequest,
+    ModAddRequest,
+    ModRequest,
+    ModsRequest,
+)
 
 logger = logging.getLogger("open_workshop.access")
 
@@ -74,10 +81,13 @@ def _crud_response(context: AccessState) -> RespBody.SimpleCrudResponse:
     response_model_exclude_none=True,
 )
 async def context(
-    payload: AccessRequest,
+    request: Request,
+    payload: ContextRequest,
     _: None = Depends(require_service_token),
 ) -> AccessState:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(
+        await fetch_manager_context(request, user_id=payload.user_id)
+    )
     return context
 
 
@@ -88,10 +98,11 @@ async def context(
     response_model_exclude_none=True,
 )
 async def mod_add(
-    payload: AccessRequest,
+    request: Request,
+    payload: ModAddRequest,
     _: None = Depends(require_service_token),
 ) -> RespBody.ModAddResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request))
     if not context.authenticated or context.owner_id < 0:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
@@ -124,11 +135,12 @@ async def mod_add(
     response_model_exclude_none=True,
 )
 async def mod(
-    payload: AccessRequest,
+    request: Request,
+    payload: ModRequest,
     mod_id: int = Path(..., description="ID мода"),
     _: None = Depends(require_service_token),
 ) -> RespBody.ModResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request, mod_ids=[mod_id]))
     mod = _mod_entry_by_id(context, mod_id)
     muted = _is_muted(context)
     is_admin = bool(context.admin)
@@ -231,10 +243,13 @@ async def mod(
     response_model_exclude_none=True,
 )
 async def mods(
-    payload: AccessRequest,
+    request: Request,
+    payload: ModsRequest,
     _: None = Depends(require_service_token),
 ) -> RespBody.ModsResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(
+        await fetch_manager_context(request, mod_ids=payload.mods_ids)
+    )
     ids = list(dict.fromkeys(int(mod_id) for mod_id in payload.mods_ids))
     allowed_ids: list[int] = []
 
@@ -277,10 +292,10 @@ async def mods(
     response_model_exclude_none=True,
 )
 async def tags(
-    payload: AccessRequest,
+    request: Request,
     _: None = Depends(require_service_token),
 ) -> RespBody.SimpleCrudResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request))
     return _crud_response(context=context)
 
 
@@ -291,10 +306,10 @@ async def tags(
     response_model_exclude_none=True,
 )
 async def genres(
-    payload: AccessRequest,
+    request: Request,
     _: None = Depends(require_service_token),
 ) -> RespBody.SimpleCrudResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request))
     return _crud_response(context=context)
 
 
@@ -305,10 +320,10 @@ async def genres(
     response_model_exclude_none=True,
 )
 async def game_add(
-    payload: AccessRequest,
+    request: Request,
     _: None = Depends(require_service_token),
 ) -> RespBody.GameAddResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request))
     can_manage = bool(context.admin)
     return RespBody.GameAddResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
@@ -329,11 +344,11 @@ async def game_add(
     response_model_exclude_none=True,
 )
 async def game(
-    payload: AccessRequest,
+    request: Request,
     game_id: int = Path(..., description="ID игры/приложения"),
     _: None = Depends(require_service_token),
 ) -> RespBody.GameResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request))
     can_manage = bool(context.admin)
     game_right = RespBody.BaseRight(
         can_manage,
@@ -365,11 +380,11 @@ async def game(
     response_model_exclude_none=True,
 )
 async def profile(
-    payload: AccessRequest,
+    request: Request,
     profile_id: int = Path(..., description="ID профиля"),
     _: None = Depends(require_service_token),
 ) -> RespBody.ProfileResponse:
-    context = _response_context(await fetch_manager_context(payload))
+    context = _response_context(await fetch_manager_context(request))
     now = datetime.datetime.now()
     is_self = context.owner_id >= 0 and context.owner_id == profile_id
     is_admin = bool(context.admin)

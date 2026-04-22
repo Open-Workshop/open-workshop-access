@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import Header, HTTPException, Request, status
 
-from . import settings as config
+import settings as config
 
 
 def _token_matches(token: str, stored: str) -> bool:

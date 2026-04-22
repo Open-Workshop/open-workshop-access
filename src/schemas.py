@@ -21,16 +21,21 @@ class AccessModEntry(AccessModel):
     member: bool = False
 
 
-class AccessRequest(AccessModel):
-    access_token: str | None = None
-    refresh_token: str | None = None
+class ContextRequest(AccessModel):
     user_id: int | None = None
-    mods_ids: list[int] = Field(default_factory=list)
-    mod_id: int | None = None
-    profile_id: int | None = None
+
+
+class ModAddRequest(AccessModel):
+    without_author: bool = False
+
+
+class ModRequest(AccessModel):
     author_id: int | None = None
     mode: bool | None = None
-    without_author: bool | None = None
+
+
+class ModsRequest(AccessModel):
+    mods_ids: list[int] = Field(default_factory=list)
     edit: bool = False
 
 

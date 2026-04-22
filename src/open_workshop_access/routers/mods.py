@@ -57,7 +57,7 @@ def _mod_response(
                 can_read = True
 
             if not muted:
-                if mod_entry.owner:
+                if mod_entry.owner or mod_entry.member:
                     can_edit = bool(context.change_self_mods)
                 else:
                     can_edit = bool(context.change_mods)

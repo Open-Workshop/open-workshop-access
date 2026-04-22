@@ -1,4 +1,8 @@
-from pydantic import BaseModel
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+from schemas import AccessState
 
 
 class BaseRight(BaseModel):
@@ -17,8 +21,6 @@ class BaseRight(BaseModel):
     """
 
 
-# MOD
-
 class ModEditResponse(BaseModel):
     title: BaseRight
     description: BaseRight
@@ -30,19 +32,22 @@ class ModEditResponse(BaseModel):
     dependencies: BaseRight
 
 
-class ModResponse(BaseModel):
+class ModResponse(AccessState):
     info: BaseRight
     edit: ModEditResponse
     delete: BaseRight
     download: BaseRight
 
-class ModAddResponse(BaseModel):
+
+class ModAddResponse(AccessState):
     add: BaseRight
 
 
-# TAG / GENRE
+class ModsResponse(AccessState):
+    allowed_ids: list[int] = Field(default_factory=list)
 
-class SimpleCrudResponse(BaseModel):
+
+class SimpleCrudResponse(AccessState):
     add: BaseRight
     edit: BaseRight
     delete: BaseRight
@@ -59,15 +64,14 @@ class GameEditResponse(BaseModel):
     genres: BaseRight
 
 
-class GameResponse(BaseModel):
+class GameResponse(AccessState):
     edit: GameEditResponse
     delete: BaseRight
 
-class GameAddResponse(BaseModel):
+
+class GameAddResponse(AccessState):
     add: BaseRight
 
-
-# PROFILE
 
 class ProfileInfoResponse(BaseModel):
     public: BaseRight
@@ -83,7 +87,7 @@ class ProfileEditResponse(BaseModel):
     rights: BaseRight
 
 
-class ProfileResponse(BaseModel):
+class ProfileResponse(AccessState):
     info: ProfileInfoResponse
     edit: ProfileEditResponse
     vote_for_reputation: BaseRight

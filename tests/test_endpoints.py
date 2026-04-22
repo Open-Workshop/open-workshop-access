@@ -14,9 +14,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-import auth
-import main as access_main
-from schemas import AccessModEntry, AccessState
+from open_workshop_access import auth, manager_client
+from open_workshop_access.app import app
+from open_workshop_access.contracts.state import AccessModEntry, AccessState
 
 
 def make_context(**overrides) -> AccessState:
@@ -69,7 +69,7 @@ def make_mod(
 class AccessEndpointTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.client = TestClient(access_main.app)
+        cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -94,7 +94,7 @@ class AccessEndpointTests(unittest.TestCase):
         context = make_context(owner_id=11, publish_mods=True)
         fetch_mock = AsyncMock(return_value=context)
 
-        with patch.object(access_main, "fetch_manager_context", fetch_mock):
+        with patch.object(manager_client, "fetch_manager_context", fetch_mock):
             response = self.request("POST", "/context", json={"user_id": 11})
 
         self.assertEqual(response.status_code, 200)
@@ -105,7 +105,7 @@ class AccessEndpointTests(unittest.TestCase):
     def test_mod_add_requires_admin_for_without_author(self) -> None:
         context = make_context(publish_mods=True)
 
-        with patch.object(access_main, "fetch_manager_context", AsyncMock(return_value=context)):
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
             response = self.request("PUT", "/mod", json={"without_author": True})
 
         self.assertEqual(response.status_code, 200)
@@ -120,7 +120,7 @@ class AccessEndpointTests(unittest.TestCase):
             mods=[make_mod(10, owner=True)],
         )
 
-        with patch.object(access_main, "fetch_manager_context", AsyncMock(return_value=context)):
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
             response = self.request("POST", "/mod/10", json={"author_id": 7, "mode": False})
 
         self.assertEqual(response.status_code, 200)
@@ -144,7 +144,7 @@ class AccessEndpointTests(unittest.TestCase):
         )
         fetch_mock = AsyncMock(return_value=context)
 
-        with patch.object(access_main, "fetch_manager_context", fetch_mock):
+        with patch.object(manager_client, "fetch_manager_context", fetch_mock):
             response = self.request(
                 "POST",
                 "/mods",
@@ -161,7 +161,7 @@ class AccessEndpointTests(unittest.TestCase):
         for path in ("/tags", "/genres"):
             with self.subTest(path=path):
                 with patch.object(
-                    access_main,
+                    manager_client,
                     "fetch_manager_context",
                     AsyncMock(return_value=context),
                 ):
@@ -180,7 +180,7 @@ class AccessEndpointTests(unittest.TestCase):
         for method, path in (("PUT", "/game"), ("POST", "/game/5")):
             with self.subTest(path=path):
                 with patch.object(
-                    access_main,
+                    manager_client,
                     "fetch_manager_context",
                     AsyncMock(return_value=context),
                 ):
@@ -203,7 +203,7 @@ class AccessEndpointTests(unittest.TestCase):
             username_change_available_at=now + datetime.timedelta(days=10),
         )
 
-        with patch.object(access_main, "fetch_manager_context", AsyncMock(return_value=context)):
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
             response = self.request("POST", "/profile/7", json={})
 
         self.assertEqual(response.status_code, 200)
@@ -223,7 +223,7 @@ class AccessEndpointTests(unittest.TestCase):
             mute_until=now + datetime.timedelta(hours=1),
         )
 
-        with patch.object(access_main, "fetch_manager_context", AsyncMock(return_value=context)):
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
             response = self.request("POST", "/profile/7", json={})
 
         self.assertEqual(response.status_code, 200)
@@ -242,7 +242,7 @@ class AccessEndpointTests(unittest.TestCase):
             authenticated=True,
         )
 
-        with patch.object(access_main, "fetch_manager_context", AsyncMock(return_value=context)):
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
             response = self.request("POST", "/profile/7", json={})
 
         self.assertEqual(response.status_code, 200)
@@ -255,7 +255,7 @@ class AccessEndpointTests(unittest.TestCase):
 
     def test_service_token_is_required(self) -> None:
         with patch.object(
-            access_main,
+            manager_client,
             "fetch_manager_context",
             AsyncMock(return_value=make_context()),
         ):

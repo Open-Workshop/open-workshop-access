@@ -28,6 +28,49 @@
   - удаление модов
   - доступ к закрытым данным профиля
 
+Текущая структура сервиса:
+
+```text
+src/
+  open_workshop_access/
+    __init__.py
+    app.py
+    auth.py
+    manager_client.py
+    settings.py
+    contracts/
+      requests.py
+      responses.py
+      state.py
+    routers/
+      catalog.py
+      context.py
+      mods.py
+      profile.py
+tests/
+  test_endpoints.py
+```
+
+Смысл структуры:
+
+- `open_workshop_access/__init__.py`
+  Публичная точка входа пакета. Экспортирует `app` для запуска через `granian`.
+
+- `open_workshop_access/app.py`
+  Создание `FastAPI`-приложения и подключение роутеров.
+
+- `open_workshop_access/auth.py`
+  Проверка сервисного токена.
+
+- `open_workshop_access/manager_client.py`
+  Доверенный запрос в manager за статичным контекстом.
+
+- `open_workshop_access/contracts/*`
+  Явные схемы запросов, ответов и состояния контекста.
+
+- `open_workshop_access/routers/*`
+  Роутеры по предметным зонам, без смешивания всех ручек в одном файле.
+
 ## Как сервис авторизуется
 
 Есть два разных токена, и у них разная роль:
@@ -75,7 +118,7 @@ export MANAGER_URL="http://127.0.0.1:7776/api/accounts"
 export ACCESS_SERVICE_TOKEN="dev-access-token"
 export ACCESS_CALLBACK_TOKEN="dev-callback-token"
 
-./venv/bin/uvicorn src.main:app --host 127.0.0.1 --port 8080 --reload
+./venv/bin/granian --interface asgi --host 127.0.0.1 --port 8080 --app-dir src open_workshop_access:app
 ```
 
 Swagger доступен по корню сервиса:
@@ -256,3 +299,4 @@ curl -X POST "http://127.0.0.1:8080/profile/7" \
 - access не должен знать про базы manager напрямую
 - ручка должна возвращать свой явный контракт, а не выбрасывать решение наружу через исключения
 - если право запрещено, причина должна возвращаться в `reason` и `reason_code`
+- сервис запускается через `granian`, отдельный `main.py` больше не нужен

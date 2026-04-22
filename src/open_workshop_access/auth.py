@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import Header, HTTPException, Request, status
 
-import settings as config
+from open_workshop_access import settings as config
 
 
 def _token_matches(token: str, stored: str) -> bool:
@@ -15,8 +15,10 @@ async def require_service_token(
     request: Request,
     token: str = Header("", alias="x-token"),
 ) -> None:
+    _ = request
     if not _token_matches(token, config.ACCESS_SERVICE_TOKEN):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
         )
+

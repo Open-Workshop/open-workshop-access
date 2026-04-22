@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 from fastapi import Request
 
-import settings as config
-from schemas import AccessState
+from open_workshop_access import settings as config
+from open_workshop_access.contracts.state import AccessState
 
 
 class ManagerCallbackError(RuntimeError):
@@ -76,3 +76,4 @@ async def fetch_manager_context(
         raise ManagerCallbackError("Manager callback returned invalid JSON") from exc
 
     return AccessState.model_validate(data)
+

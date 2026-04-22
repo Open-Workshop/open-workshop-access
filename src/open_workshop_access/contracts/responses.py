@@ -2,23 +2,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from schemas import AccessState
+from open_workshop_access.contracts.state import AccessState
 
 
 class BaseRight(BaseModel):
     value: bool
     reason: str
-    """
-    Примеры:
-    1. Вы в муте (value==false)
-    2. Вы админ (value==true)
-    """
     reason_code: str
-    """
-    Примеры:
-    1. in_mute (value==false)
-    2. admin (value==true)
-    """
 
 
 class ModEditResponse(BaseModel):
@@ -52,8 +42,6 @@ class SimpleCrudResponse(AccessState):
     edit: BaseRight
     delete: BaseRight
 
-
-# GAME
 
 class GameEditResponse(BaseModel):
     title: BaseRight
@@ -95,13 +83,3 @@ class ProfileResponse(AccessState):
     set_reactions: BaseRight
     delete: BaseRight
 
-
-# Ошибка
-
-class ErrorDetailResponse(BaseModel):
-    code: str
-    message: str
-
-
-class ErrorResponse(BaseModel):
-    detail: ErrorDetailResponse

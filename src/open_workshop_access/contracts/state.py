@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class AccessModel(BaseModel):
@@ -19,25 +19,6 @@ class AccessModEntry(AccessModel):
     condition: int = 0
     owner: bool = False
     member: bool = False
-
-
-class ContextRequest(AccessModel):
-    user_id: int | None = None
-
-
-class ModAddRequest(AccessModel):
-    without_author: bool = False
-
-
-class ModRequest(AccessModel):
-    author_id: int | None = None
-    mode: bool | None = None
-
-
-class ModsRequest(AccessModel):
-    user_id: int | None = None
-    mods_ids: list[int] = Field(default_factory=list)
-    edit: bool = False
 
 
 class AccessState(AccessModel):
@@ -77,3 +58,4 @@ class AccessState(AccessModel):
     username_change_available_at: datetime | None = None
 
     mods: list[AccessModEntry] | None = None
+

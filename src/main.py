@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Path, Request
 import responses.body as RespBody
 
 
@@ -21,13 +21,27 @@ app = FastAPI(
 )
 
 
-@app.get(
+@app.put(
     "/mod",
+    summary="Get mod add access permissions",
+    response_model=RespBody.ModAddResponse,
+)
+async def mod(
+    request: Request
+) -> RespBody.ModResponse:
+    return RespBody.ModAddResponse(
+        add=True
+    )
+
+
+@app.post(
+    "/mod/{mod_id}",
     summary="Get mod access permissions",
     response_model=RespBody.ModResponse,
 )
 async def mod(
-    request: Request
+    request: Request,
+    mod_id: int = Path(..., description="ID мода"),
 ) -> RespBody.ModResponse:
     return RespBody.ModResponse(
         info=True,
@@ -46,7 +60,7 @@ async def mod(
     )
 
 
-@app.get(
+@app.patch(
     "/tags",
     summary="Get tags access permissions",
     response_model=RespBody.SimpleCrudResponse,
@@ -61,7 +75,7 @@ async def tags(
     )
 
 
-@app.get(
+@app.patch(
     "/genres",
     summary="Get genres access permissions",
     response_model=RespBody.SimpleCrudResponse,
@@ -76,13 +90,26 @@ async def genres(
     )
 
 
-@app.get(
+@app.put(
     "/game",
+    summary="Get game add permissions",
+    response_model=RespBody.GameAddResponse,
+)
+async def game(
+    request: Request,
+) -> RespBody.GameAddResponse:
+    return RespBody.GameAddResponse(
+        edit=True
+    )
+
+@app.post(
+    "/game/{mod_id}",
     summary="Get game access permissions",
     response_model=RespBody.GameResponse,
 )
 async def game(
-    request: Request
+    request: Request,
+    game_id: int = Path(..., description="ID игры/приложения"),
 ) -> RespBody.GameResponse:
     return RespBody.GameResponse(
         edit=RespBody.GameEditResponse(
@@ -97,13 +124,14 @@ async def game(
     )
 
 
-@app.get(
-    "/profile",
+@app.post(
+    "/profile/{profile_id}",
     summary="Get profile access permissions",
     response_model=RespBody.ProfileResponse,
 )
 async def profile(
-    request: Request
+    request: Request,
+    profile_id: int = Path(..., description="ID профиля"),
 ) -> RespBody.ProfileResponse:
     return RespBody.ProfileResponse(
         info=RespBody.ProfileInfoResponse(

@@ -36,6 +36,9 @@ class ModResponse(BaseModel):
     delete: BaseRight
     download: BaseRight
 
+class ModAddResponse(BaseModel):
+    add: BaseRight
+
 
 # TAG / GENRE
 
@@ -59,6 +62,9 @@ class GameEditResponse(BaseModel):
 class GameResponse(BaseModel):
     edit: GameEditResponse
     delete: BaseRight
+
+class GameAddResponse(BaseModel):
+    add: BaseRight
 
 
 # PROFILE

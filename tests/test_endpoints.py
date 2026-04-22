@@ -98,9 +98,52 @@ class AccessEndpointTests(unittest.TestCase):
             response = self.request("POST", "/context")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["owner_id"], 11)
-        self.assertTrue(response.json()["publish_mods"])
+        body = response.json()
+        self.assertTrue(body["authenticated"])
+        self.assertEqual(body["login_method"], "password")
+        self.assertNotIn("owner_id", body)
+        self.assertNotIn("admin", body)
+        self.assertNotIn("publish_mods", body)
+        self.assertNotIn("change_self_mods", body)
         self.assertEqual(fetch_mock.await_args.kwargs, {})
+
+    def test_openapi_responses_do_not_expose_mods(self) -> None:
+        response = self.client.get("/openapi.json")
+
+        self.assertEqual(response.status_code, 200)
+        schemas = response.json()["components"]["schemas"]
+
+        for schema_name in (
+            "AccessContext",
+            "SimpleCrudResponse",
+            "ModAddResponse",
+            "ModsResponse",
+            "GameAddResponse",
+            "GameResponse",
+            "ModResponse",
+            "ProfileResponse",
+        ):
+            with self.subTest(schema=schema_name):
+                self.assertNotIn(
+                    "mods",
+                    schemas[schema_name].get("properties", {}),
+                )
+                self.assertNotIn(
+                    "owner_id",
+                    schemas[schema_name].get("properties", {}),
+                )
+                self.assertNotIn(
+                    "admin",
+                    schemas[schema_name].get("properties", {}),
+                )
+                self.assertNotIn(
+                    "publish_mods",
+                    schemas[schema_name].get("properties", {}),
+                )
+                self.assertNotIn(
+                    "change_self_mods",
+                    schemas[schema_name].get("properties", {}),
+                )
 
     def test_mod_add_returns_anonymous_add_right(self) -> None:
         context = make_context(publish_mods=True)

@@ -118,7 +118,7 @@ export MANAGER_URL="http://127.0.0.1:7776/api/accounts"
 export ACCESS_SERVICE_TOKEN="dev-access-token"
 export ACCESS_CALLBACK_TOKEN="dev-callback-token"
 
-./venv/bin/granian --interface asgi --host 127.0.0.1 --port 8080 --app-dir src open_workshop_access:app
+./venv/bin/granian --interface asgi --host 127.0.0.1 --port 8080 --working-dir src open_workshop_access:app
 ```
 
 Swagger доступен по корню сервиса:

@@ -1,17 +1,121 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from open_workshop_access.contracts.state import AccessState
+from open_workshop_access.contracts.state import ACCESS_CONTEXT_EXAMPLE, AccessContext
+
+
+BASE_RIGHT_EXAMPLE = {
+    "value": True,
+    "reason": "Можно публиковать моды",
+    "reason_code": "allowed",
+}
+
+BASE_RIGHT_FORBIDDEN_EXAMPLE = {
+    "value": False,
+    "reason": "Публикация без автора доступна только администратору",
+    "reason_code": "admin_required",
+}
+
+CRUD_RIGHT_EXAMPLE = {
+    "value": True,
+    "reason": "Администратор может выполнять действие",
+    "reason_code": "admin",
+}
+
+MOD_EDIT_RESPONSE_EXAMPLE = {
+    "title": BASE_RIGHT_EXAMPLE,
+    "description": BASE_RIGHT_EXAMPLE,
+    "short_description": BASE_RIGHT_EXAMPLE,
+    "screenshots": BASE_RIGHT_EXAMPLE,
+    "new_version": BASE_RIGHT_EXAMPLE,
+    "authors": BASE_RIGHT_EXAMPLE,
+    "tags": BASE_RIGHT_EXAMPLE,
+    "dependencies": BASE_RIGHT_EXAMPLE,
+}
+
+GAME_EDIT_RESPONSE_EXAMPLE = {
+    "title": CRUD_RIGHT_EXAMPLE,
+    "description": CRUD_RIGHT_EXAMPLE,
+    "short_description": CRUD_RIGHT_EXAMPLE,
+    "screenshots": CRUD_RIGHT_EXAMPLE,
+    "tags": CRUD_RIGHT_EXAMPLE,
+    "genres": CRUD_RIGHT_EXAMPLE,
+}
+
+PROFILE_INFO_RESPONSE_EXAMPLE = {
+    "public": BASE_RIGHT_EXAMPLE,
+    "meta": BASE_RIGHT_EXAMPLE,
+}
+
+PROFILE_EDIT_RESPONSE_EXAMPLE = {
+    "nickname": BASE_RIGHT_EXAMPLE,
+    "grade": CRUD_RIGHT_EXAMPLE,
+    "description": BASE_RIGHT_EXAMPLE,
+    "avatar": BASE_RIGHT_EXAMPLE,
+    "mute": CRUD_RIGHT_EXAMPLE,
+    "rights": CRUD_RIGHT_EXAMPLE,
+}
+
+MOD_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "info": BASE_RIGHT_EXAMPLE,
+    "edit": MOD_EDIT_RESPONSE_EXAMPLE,
+    "delete": BASE_RIGHT_EXAMPLE,
+    "download": BASE_RIGHT_EXAMPLE,
+}
+
+MOD_ADD_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "add": BASE_RIGHT_EXAMPLE,
+    "anonymous_add": BASE_RIGHT_FORBIDDEN_EXAMPLE,
+}
+
+MODS_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "allowed_ids": [1, 2, 3],
+}
+
+SIMPLE_CRUD_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "add": CRUD_RIGHT_EXAMPLE,
+    "edit": CRUD_RIGHT_EXAMPLE,
+    "delete": CRUD_RIGHT_EXAMPLE,
+}
+
+GAME_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "edit": GAME_EDIT_RESPONSE_EXAMPLE,
+    "delete": CRUD_RIGHT_EXAMPLE,
+}
+
+GAME_ADD_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "add": CRUD_RIGHT_EXAMPLE,
+}
+
+PROFILE_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "info": PROFILE_INFO_RESPONSE_EXAMPLE,
+    "edit": PROFILE_EDIT_RESPONSE_EXAMPLE,
+    "vote_for_reputation": BASE_RIGHT_EXAMPLE,
+    "write_comments": BASE_RIGHT_EXAMPLE,
+    "set_reactions": BASE_RIGHT_EXAMPLE,
+    "delete": BASE_RIGHT_EXAMPLE,
+}
 
 
 class BaseRight(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": BASE_RIGHT_EXAMPLE})
+
     value: bool
     reason: str
     reason_code: str
 
 
 class ModEditResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": MOD_EDIT_RESPONSE_EXAMPLE})
+
     title: BaseRight
     description: BaseRight
     short_description: BaseRight
@@ -22,29 +126,41 @@ class ModEditResponse(BaseModel):
     dependencies: BaseRight
 
 
-class ModResponse(AccessState):
+class ModResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": MOD_RESPONSE_EXAMPLE})
+
     info: BaseRight
     edit: ModEditResponse
     delete: BaseRight
     download: BaseRight
 
 
-class ModAddResponse(AccessState):
+class ModAddResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": MOD_ADD_RESPONSE_EXAMPLE})
+
     add: BaseRight
     anonymous_add: BaseRight
 
 
-class ModsResponse(AccessState):
+class ModsResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": MODS_RESPONSE_EXAMPLE})
+
     allowed_ids: list[int] = Field(default_factory=list)
 
 
-class SimpleCrudResponse(AccessState):
+class SimpleCrudResponse(AccessContext):
+    model_config = ConfigDict(
+        json_schema_extra={"example": SIMPLE_CRUD_RESPONSE_EXAMPLE}
+    )
+
     add: BaseRight
     edit: BaseRight
     delete: BaseRight
 
 
 class GameEditResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": GAME_EDIT_RESPONSE_EXAMPLE})
+
     title: BaseRight
     description: BaseRight
     short_description: BaseRight
@@ -53,21 +169,33 @@ class GameEditResponse(BaseModel):
     genres: BaseRight
 
 
-class GameResponse(AccessState):
+class GameResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": GAME_RESPONSE_EXAMPLE})
+
     edit: GameEditResponse
     delete: BaseRight
 
 
-class GameAddResponse(AccessState):
+class GameAddResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": GAME_ADD_RESPONSE_EXAMPLE})
+
     add: BaseRight
 
 
 class ProfileInfoResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={"example": PROFILE_INFO_RESPONSE_EXAMPLE}
+    )
+
     public: BaseRight
     meta: BaseRight
 
 
 class ProfileEditResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={"example": PROFILE_EDIT_RESPONSE_EXAMPLE}
+    )
+
     nickname: BaseRight
     grade: BaseRight
     description: BaseRight
@@ -76,7 +204,9 @@ class ProfileEditResponse(BaseModel):
     rights: BaseRight
 
 
-class ProfileResponse(AccessState):
+class ProfileResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": PROFILE_RESPONSE_EXAMPLE})
+
     info: ProfileInfoResponse
     edit: ProfileEditResponse
     vote_for_reputation: BaseRight

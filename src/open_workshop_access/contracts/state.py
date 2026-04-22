@@ -6,6 +6,29 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 
+ACCESS_MOD_ENTRY_EXAMPLE = {
+    "mod_id": 1,
+    "public": 0,
+    "condition": 0,
+    "owner": True,
+    "member": False,
+}
+
+ACCESS_CONTEXT_EXAMPLE = {
+    "authenticated": True,
+    "login_method": "password",
+}
+
+ACCESS_STATE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "owner_id": 7,
+    "admin": False,
+    "publish_mods": True,
+    "change_self_mods": True,
+    "mods": [ACCESS_MOD_ENTRY_EXAMPLE],
+}
+
+
 class AccessModel(BaseModel):
     model_config = ConfigDict(from_attributes=True, extra="ignore")
 
@@ -14,6 +37,12 @@ class AccessModel(BaseModel):
 
 
 class AccessModEntry(AccessModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        extra="ignore",
+        json_schema_extra={"example": ACCESS_MOD_ENTRY_EXAMPLE},
+    )
+
     mod_id: int
     public: int = 0
     condition: int = 0
@@ -21,21 +50,23 @@ class AccessModEntry(AccessModel):
     member: bool = False
 
 
-class AccessState(AccessModel):
+class AccessContext(AccessModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        extra="ignore",
+        json_schema_extra={"example": ACCESS_CONTEXT_EXAMPLE},
+    )
+
     authenticated: bool = False
-    owner_id: int = -1
     login_method: str | None = None
 
-    admin: bool = False
     write_comments: bool = False
     set_reactions: bool = False
     create_reactions: bool = False
     mute_until: datetime | None = None
     mute_users: bool = False
 
-    publish_mods: bool = False
     change_authorship_mods: bool = False
-    change_self_mods: bool = False
     change_mods: bool = False
     delete_self_mods: bool = False
     delete_mods: bool = False
@@ -57,5 +88,16 @@ class AccessState(AccessModel):
     password_change_available_at: datetime | None = None
     username_change_available_at: datetime | None = None
 
-    mods: list[AccessModEntry] | None = None
 
+class AccessState(AccessContext):
+    model_config = ConfigDict(
+        from_attributes=True,
+        extra="ignore",
+        json_schema_extra={"example": ACCESS_STATE_EXAMPLE},
+    )
+
+    owner_id: int = -1
+    admin: bool = False
+    publish_mods: bool = False
+    change_self_mods: bool = False
+    mods: list[AccessModEntry] | None = None

@@ -17,6 +17,7 @@ router = APIRouter()
 
 
 def _crud_response(context: AccessState) -> SimpleCrudResponse:
+    public_context = context.to_public_context()
     can_manage = bool(context.admin)
     admin_right = BaseRight(
         value=can_manage,
@@ -28,7 +29,7 @@ def _crud_response(context: AccessState) -> SimpleCrudResponse:
         reason_code="admin" if can_manage else "forbidden",
     )
     return SimpleCrudResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
+        **public_context.model_dump(exclude_none=True),
         add=admin_right,
         edit=admin_right,
         delete=admin_right,
@@ -65,9 +66,10 @@ async def genres(request: Request) -> SimpleCrudResponse:
 )
 async def game_add(request: Request) -> GameAddResponse:
     context = await manager_client.fetch_manager_context(request)
+    public_context = context.to_public_context()
     can_manage = bool(context.admin)
     return GameAddResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
+        **public_context.model_dump(exclude_none=True),
         add=BaseRight(
             value=can_manage,
             reason=(
@@ -92,6 +94,7 @@ async def game(
 ) -> GameResponse:
     _ = game_id
     context = await manager_client.fetch_manager_context(request)
+    public_context = context.to_public_context()
     can_manage = bool(context.admin)
     game_right = BaseRight(
         value=can_manage,
@@ -103,7 +106,7 @@ async def game(
         reason_code="admin" if can_manage else "forbidden",
     )
     return GameResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
+        **public_context.model_dump(exclude_none=True),
         edit=GameEditResponse(
             title=game_right,
             description=game_right,

@@ -32,6 +32,7 @@ async def profile(
     profile_id: int = Path(..., description="ID профиля"),
 ) -> ProfileResponse:
     context = await manager_client.fetch_manager_context(request)
+    public_context = context.to_public_context()
     now = datetime.datetime.now()
     is_self = context.owner_id >= 0 and context.owner_id == profile_id
     is_admin = bool(context.admin)
@@ -160,15 +161,7 @@ async def profile(
     )
 
     return ProfileResponse(
-        **context.model_dump(
-            exclude={
-                "mods",
-                "write_comments",
-                "set_reactions",
-                "vote_for_reputation",
-            },
-            exclude_none=True,
-        ),
+        **public_context.model_dump(exclude_none=True),
         info=ProfileInfoResponse(
             public=BaseRight(
                 value=True,

@@ -18,4 +18,4 @@ router = APIRouter()
 async def context(
     request: Request,
 ) -> AccessContext:
-    return await manager_client.fetch_manager_context(request)
+    return (await manager_client.fetch_manager_context(request)).to_public_context()

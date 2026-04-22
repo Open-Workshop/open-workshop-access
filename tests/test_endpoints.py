@@ -16,7 +16,11 @@ if str(SRC) not in sys.path:
 
 from open_workshop_access import manager_client
 from open_workshop_access.app import app
-from open_workshop_access.contracts.state import AccessModEntry, AccessState
+from open_workshop_access.contracts.state import (
+    ACCESS_PUBLIC_CONTEXT_FIELDS,
+    AccessModEntry,
+    AccessState,
+)
 
 
 def make_context(**overrides) -> AccessState:
@@ -66,6 +70,36 @@ def make_mod(
     )
 
 
+INTERNAL_STATE_FIELDS = (
+    "owner_id",
+    "admin",
+    "create_reactions",
+    "mute_users",
+    "publish_mods",
+    "change_authorship_mods",
+    "change_self_mods",
+    "change_mods",
+    "delete_self_mods",
+    "delete_mods",
+    "create_forums",
+    "change_authorship_forums",
+    "change_self_forums",
+    "change_forums",
+    "delete_self_forums",
+    "delete_forums",
+    "change_username",
+    "change_about",
+    "change_avatar",
+    "mods",
+)
+
+PROFILE_EXPLICIT_RIGHT_FIELDS = (
+    "write_comments",
+    "set_reactions",
+    "vote_for_reputation",
+)
+
+
 class AccessEndpointTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -89,11 +123,40 @@ class AccessEndpointTests(unittest.TestCase):
         body = response.json()
         self.assertTrue(body["authenticated"])
         self.assertEqual(body["login_method"], "password")
-        self.assertNotIn("owner_id", body)
-        self.assertNotIn("admin", body)
-        self.assertNotIn("publish_mods", body)
-        self.assertNotIn("change_self_mods", body)
+        for leaked_field in INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS:
+            self.assertNotIn(leaked_field, body)
         self.assertEqual(fetch_mock.await_args.kwargs, {})
+
+    def test_public_context_projection_is_whitelist_only(self) -> None:
+        now = datetime.datetime.now()
+        context = make_context(
+            owner_id=11,
+            admin=True,
+            write_comments=True,
+            set_reactions=True,
+            publish_mods=True,
+            change_self_mods=True,
+            change_username=True,
+            change_about=True,
+            change_avatar=True,
+            vote_for_reputation=True,
+            mute_until=now,
+            last_username_reset=now,
+            last_password_reset=now,
+            password_change_available_at=now,
+            username_change_available_at=now,
+            mods=[make_mod(1, owner=True)],
+        )
+
+        public_body = context.to_public_context().model_dump(exclude_none=True)
+
+        self.assertTrue(
+            set(public_body).issubset(set(ACCESS_PUBLIC_CONTEXT_FIELDS)),
+        )
+        for leaked_field in INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS:
+            self.assertNotIn(leaked_field, public_body)
+        self.assertIn("authenticated", public_body)
+        self.assertIn("login_method", public_body)
 
     def test_openapi_responses_do_not_expose_mods(self) -> None:
         response = self.client.get("/openapi.json")
@@ -108,29 +171,21 @@ class AccessEndpointTests(unittest.TestCase):
             "GameAddResponse",
             "GameResponse",
             "ModResponse",
-            "ProfileResponse",
         ):
             with self.subTest(schema=schema_name):
-                self.assertNotIn(
-                    "mods",
-                    schemas[schema_name].get("properties", {}),
-                )
-                self.assertNotIn(
-                    "owner_id",
-                    schemas[schema_name].get("properties", {}),
-                )
-                self.assertNotIn(
-                    "admin",
-                    schemas[schema_name].get("properties", {}),
-                )
-                self.assertNotIn(
-                    "publish_mods",
-                    schemas[schema_name].get("properties", {}),
-                )
-                self.assertNotIn(
-                    "change_self_mods",
-                    schemas[schema_name].get("properties", {}),
-                )
+                for leaked_field in (
+                    INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS
+                ):
+                    self.assertNotIn(
+                        leaked_field,
+                        schemas[schema_name].get("properties", {}),
+                    )
+
+        profile_properties = schemas["ProfileResponse"].get("properties", {})
+        for leaked_field in INTERNAL_STATE_FIELDS:
+            self.assertNotIn(leaked_field, profile_properties)
+        for exposed_field in PROFILE_EXPLICIT_RIGHT_FIELDS:
+            self.assertIn(exposed_field, profile_properties)
 
     def test_mod_add_returns_anonymous_add_right(self) -> None:
         context = make_context(publish_mods=True)
@@ -205,6 +260,9 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertTrue(body["2"]["info"]["value"])
         self.assertFalse(body["2"]["edit"]["title"]["value"])
         self.assertFalse(body["2"]["delete"]["value"])
+        for mod_body in body.values():
+            for leaked_field in INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS:
+                self.assertNotIn(leaked_field, mod_body)
         self.assertEqual(fetch_mock.await_args.kwargs, {"mod_ids": [1, 2, 3]})
 
     def test_tags_and_genres_return_admin_crud_rights(self) -> None:

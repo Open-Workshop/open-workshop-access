@@ -36,6 +36,7 @@ def _mod_response(
     mod_id: int,
     payload: ModRequest | None = None,
 ) -> ModResponse:
+    public_context = context.to_public_context()
     mod_entry = _mod_entry_by_id(context, mod_id)
     muted = _is_muted(context)
     is_admin = bool(context.admin)
@@ -101,7 +102,7 @@ def _mod_response(
     )
 
     return ModResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
+        **public_context.model_dump(exclude_none=True),
         info=BaseRight(
             value=can_read,
             reason="Мод доступен для просмотра" if can_read else "Мод скрыт",
@@ -148,6 +149,7 @@ async def mod_add(
     request: Request,
 ) -> ModAddResponse:
     context = await manager_client.fetch_manager_context(request)
+    public_context = context.to_public_context()
     muted = _is_muted(context)
 
     can_add = False
@@ -180,7 +182,7 @@ async def mod_add(
             anonymous_add_reason_code = "admin_required"
 
     return ModAddResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
+        **public_context.model_dump(exclude_none=True),
         add=BaseRight(
             value=can_add,
             reason=add_reason,

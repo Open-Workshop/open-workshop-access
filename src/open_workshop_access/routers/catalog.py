@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Path, Request
 
 from open_workshop_access import manager_client
-from open_workshop_access.auth import require_service_token
 from open_workshop_access.contracts.responses import (
     BaseRight,
     GameAddResponse,
@@ -14,7 +13,7 @@ from open_workshop_access.contracts.responses import (
 from open_workshop_access.contracts.state import AccessState
 
 
-router = APIRouter(dependencies=[Depends(require_service_token)])
+router = APIRouter()
 
 
 def _crud_response(context: AccessState) -> SimpleCrudResponse:
@@ -123,4 +122,3 @@ async def game(
             reason_code="admin" if can_manage else "forbidden",
         ),
     )
-

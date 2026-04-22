@@ -4,10 +4,9 @@
 
 Он не хранит собственное состояние сессии и не ходит напрямую в базы manager. Вместо этого сервис:
 
-1. принимает запрос от `open-workshop-manager`,
-2. проверяет сервисный токен в заголовке `Authorization: Bearer ...`,
-3. по кукам `accessToken` и `refreshToken` запрашивает у manager доверенный статический контекст,
-4. собирает и возвращает контракт прав для конкретной ручки.
+1. принимает запросы от клиента,
+2. по кукам `accessToken` и `refreshToken` запрашивает у manager доверенный статический контекст,
+3. собирает и возвращает контракт прав для конкретной ручки.
 
 Сервис нужен для того, чтобы логика принятия решений по доступу жила отдельно от основного manager-репозитория и возвращала единый, явный ответ с полями:
 
@@ -35,7 +34,6 @@ src/
   open_workshop_access/
     __init__.py
     app.py
-    auth.py
     manager_client.py
     settings.py
     contracts/
@@ -59,9 +57,6 @@ tests/
 - `open_workshop_access/app.py`
   Создание `FastAPI`-приложения и подключение роутеров.
 
-- `open_workshop_access/auth.py`
-  Проверка сервисного токена.
-
 - `open_workshop_access/manager_client.py`
   Доверенный запрос в manager за статичным контекстом.
 
@@ -73,10 +68,9 @@ tests/
 
 ## Как сервис авторизуется
 
-Есть два разных токена, и у них разная роль:
+Публичные ручки `access` не требуют сервисного токена.
 
-- `ACCESS_SERVICE_TOKEN`
-  Используется manager -> access. Передаётся в заголовке `Authorization: Bearer ...`.
+Единственный токен, который использует сам `access`, это:
 
 - `ACCESS_CALLBACK_TOKEN`
   Используется access -> manager callback. Передаётся в заголовке `Authorization: Bearer ...`.
@@ -97,7 +91,6 @@ tests/
 | Переменная | По умолчанию | Назначение |
 | --- | --- | --- |
 | `MANAGER_URL` | `http://127.0.0.1:7776/api/accounts` | Базовый URL manager для trusted callback |
-| `ACCESS_SERVICE_TOKEN` | `""` | Токен, которым manager подписывает запросы в access |
 | `ACCESS_CALLBACK_TOKEN` | `""` | Токен, которым access подписывает callback-запросы в manager |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | Таймаут callback-запроса к manager |
 | `LOG_LEVEL` | `INFO` | Уровень логирования |
@@ -115,7 +108,6 @@ python3 -m venv venv
 
 ```bash
 export MANAGER_URL="http://127.0.0.1:7776/api/accounts"
-export ACCESS_SERVICE_TOKEN="dev-access-token"
 export ACCESS_CALLBACK_TOKEN="dev-callback-token"
 
 ./venv/bin/granian --interface asgi --host 127.0.0.1 --port 8080 --working-dir src open_workshop_access:app
@@ -131,10 +123,9 @@ GET /
 
 ### Вход в access
 
-Любой запрос в access должен содержать:
+Входящие ручки `access` анонимны.
 
-- заголовок `Authorization: Bearer <ACCESS_SERVICE_TOKEN>`
-- при пользовательском сценарии куки `accessToken` и `refreshToken`
+При пользовательском сценарии сервис использует только куки `accessToken` и `refreshToken`.
 
 ### Callback в manager
 
@@ -161,6 +152,7 @@ POST {MANAGER_URL}/access/callback/context
 Возвращает текущий контекст доступа активной сессии.
 
 Ручка не принимает body и всегда работает по активным кукам `accessToken` и `refreshToken`.
+Сервисный токен для неё не нужен.
 
 Она нужна manager'у, когда требуется получить актуальный snapshot прав текущего пользователя без передачи отдельного идентификатора.
 

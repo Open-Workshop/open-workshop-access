@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Path, Request
 
 from open_workshop_access import manager_client
-from open_workshop_access.auth import require_service_token
 from open_workshop_access.contracts.responses import (
     BaseRight,
     ProfileEditResponse,
@@ -15,7 +14,7 @@ from open_workshop_access.contracts.responses import (
 from open_workshop_access.contracts.state import AccessState
 
 
-router = APIRouter(dependencies=[Depends(require_service_token)])
+router = APIRouter()
 
 
 def _is_muted(context: AccessState) -> bool:
@@ -217,4 +216,3 @@ async def profile(
             reason_code="self" if is_self else "forbidden",
         ),
     )
-

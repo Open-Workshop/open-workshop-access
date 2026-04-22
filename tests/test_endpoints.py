@@ -14,7 +14,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from open_workshop_access import auth, manager_client
+from open_workshop_access import manager_client
 from open_workshop_access.app import app
 from open_workshop_access.contracts.state import AccessModEntry, AccessState
 
@@ -75,20 +75,8 @@ class AccessEndpointTests(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.client.close()
 
-    def setUp(self) -> None:
-        self.token_patch = patch.object(auth.config, "ACCESS_SERVICE_TOKEN", "test-token")
-        self.token_patch.start()
-
-    def tearDown(self) -> None:
-        self.token_patch.stop()
-
     def request(self, method: str, path: str, *, json: dict | None = None):
-        return self.client.request(
-            method,
-            path,
-            json=json,
-            headers={"Authorization": "Bearer test-token"},
-        )
+        return self.client.request(method, path, json=json)
 
     def test_context_returns_manager_context(self) -> None:
         context = make_context(owner_id=11, publish_mods=True)
@@ -317,7 +305,7 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertTrue(body["edit"]["rights"]["value"])
         self.assertFalse(body["delete"]["value"])
 
-    def test_service_token_is_required(self) -> None:
+    def test_context_accepts_anonymous_requests(self) -> None:
         with patch.object(
             manager_client,
             "fetch_manager_context",
@@ -325,8 +313,8 @@ class AccessEndpointTests(unittest.TestCase):
         ):
             response = self.client.post("/context")
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.json()["detail"], "Access denied")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["authenticated"])
 
 
 if __name__ == "__main__":

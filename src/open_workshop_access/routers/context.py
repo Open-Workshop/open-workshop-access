@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from open_workshop_access import manager_client
-from open_workshop_access.auth import require_service_token
 from open_workshop_access.contracts.state import AccessContext
 
 
-router = APIRouter(dependencies=[Depends(require_service_token)])
+router = APIRouter()
 
 
 @router.post(

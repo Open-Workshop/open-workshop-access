@@ -43,10 +43,6 @@ def _is_muted(context: AccessState) -> bool:
     return bool(context.mute_until and context.mute_until > datetime.datetime.now())
 
 
-def _is_self(context: AccessState, target_id: int) -> bool:
-    return context.owner_id >= 0 and context.owner_id == target_id
-
-
 def _mod_entry_by_id(context: AccessState, mod_id: int) -> AccessModEntry | None:
     if not context.mods:
         return None
@@ -375,7 +371,7 @@ async def profile(
 ) -> RespBody.ProfileResponse:
     context = _response_context(await fetch_manager_context(payload))
     now = datetime.datetime.now()
-    is_self = _is_self(context, profile_id)
+    is_self = context.owner_id >= 0 and context.owner_id == profile_id
     is_admin = bool(context.admin)
     muted = _is_muted(context)
 

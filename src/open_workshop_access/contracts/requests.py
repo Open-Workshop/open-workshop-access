@@ -16,8 +16,7 @@ class ModRequest(AccessModel):
 
 class ModsRequest(AccessModel):
     model_config = ConfigDict(
-        json_schema_extra={"example": {"mods_ids": [1, 2, 3], "edit": False}}
+        json_schema_extra={"example": {"mods_ids": [1, 2, 3]}}
     )
 
     mods_ids: list[int]
-    edit: bool = False

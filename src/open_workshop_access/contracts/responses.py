@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from open_workshop_access.contracts.state import ACCESS_CONTEXT_EXAMPLE, AccessContext
 
@@ -71,11 +71,6 @@ MOD_ADD_RESPONSE_EXAMPLE = {
     "anonymous_add": BASE_RIGHT_FORBIDDEN_EXAMPLE,
 }
 
-MODS_RESPONSE_EXAMPLE = {
-    **ACCESS_CONTEXT_EXAMPLE,
-    "allowed_ids": [1, 2, 3],
-}
-
 SIMPLE_CRUD_RESPONSE_EXAMPLE = {
     **ACCESS_CONTEXT_EXAMPLE,
     "add": CRUD_RIGHT_EXAMPLE,
@@ -140,12 +135,6 @@ class ModAddResponse(AccessContext):
 
     add: BaseRight
     anonymous_add: BaseRight
-
-
-class ModsResponse(AccessContext):
-    model_config = ConfigDict(json_schema_extra={"example": MODS_RESPONSE_EXAMPLE})
-
-    allowed_ids: list[int] = Field(default_factory=list)
 
 
 class SimpleCrudResponse(AccessContext):

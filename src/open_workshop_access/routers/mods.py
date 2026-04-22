@@ -12,7 +12,6 @@ from open_workshop_access.contracts.responses import (
     ModAddResponse,
     ModEditResponse,
     ModResponse,
-    ModsResponse,
 )
 from open_workshop_access.contracts.state import AccessModEntry, AccessState
 
@@ -31,6 +30,113 @@ def _mod_entry_by_id(context: AccessState, mod_id: int) -> AccessModEntry | None
         if mod.mod_id == mod_id:
             return mod
     return None
+
+
+def _mod_response(
+    context: AccessState,
+    mod_id: int,
+    payload: ModRequest | None = None,
+) -> ModResponse:
+    mod_entry = _mod_entry_by_id(context, mod_id)
+    muted = _is_muted(context)
+    is_admin = bool(context.admin)
+
+    can_read = False
+    can_edit = False
+    can_manage_authors = False
+    can_delete = False
+
+    if mod_entry is not None:
+        if is_admin:
+            can_read = True
+            can_edit = True
+            can_manage_authors = True
+            can_delete = True
+        else:
+            if mod_entry.owner or mod_entry.member or mod_entry.public <= 1:
+                can_read = True
+
+            if not muted:
+                if mod_entry.owner:
+                    can_edit = bool(context.change_self_mods)
+                elif mod_entry.member or mod_entry.public > 1:
+                    can_edit = False
+                else:
+                    can_edit = bool(context.change_mods)
+
+                if payload is not None:
+                    if mod_entry.owner:
+                        can_manage_authors = not (
+                            payload.author_id is not None
+                            and payload.author_id == context.owner_id
+                            and payload.mode is False
+                        )
+                    elif mod_entry.member:
+                        can_manage_authors = (
+                            payload.author_id is not None
+                            and payload.author_id == context.owner_id
+                            and payload.mode is False
+                        )
+                    else:
+                        can_manage_authors = bool(context.change_authorship_mods)
+                else:
+                    can_manage_authors = bool(context.change_authorship_mods)
+
+                if mod_entry.owner and context.delete_self_mods:
+                    can_delete = True
+                else:
+                    can_delete = bool(context.delete_mods)
+
+    edit_reason = "Администратор имеет доступ" if is_admin else "Доступ к модификации ограничен"
+    if mod_entry is not None and mod_entry.owner:
+        edit_reason = "Можно редактировать свой мод"
+    elif mod_entry is not None and not mod_entry.owner and not mod_entry.member and mod_entry.public <= 1:
+        edit_reason = "Можно редактировать публичный мод"
+    elif muted:
+        edit_reason = "Вы в муте"
+
+    edit_right = BaseRight(
+        value=can_edit,
+        reason=edit_reason,
+        reason_code="edit" if can_edit else "forbidden",
+    )
+
+    return ModResponse(
+        **context.model_dump(exclude={"mods"}, exclude_none=True),
+        info=BaseRight(
+            value=can_read,
+            reason="Мод доступен для просмотра" if can_read else "Мод скрыт",
+            reason_code="public" if can_read else "hidden",
+        ),
+        edit=ModEditResponse(
+            title=edit_right,
+            description=edit_right,
+            short_description=edit_right,
+            screenshots=edit_right,
+            new_version=edit_right,
+            authors=BaseRight(
+                value=can_manage_authors,
+                reason=(
+                    "Можно управлять авторами"
+                    if can_manage_authors
+                    else "Управление авторами недоступно"
+                ),
+                reason_code="authors" if can_manage_authors else "forbidden",
+            ),
+            tags=edit_right,
+            dependencies=edit_right,
+        ),
+        delete=BaseRight(
+            value=can_delete,
+            reason="Можно удалить мод" if can_delete else "Удаление недоступно",
+            reason_code="delete" if can_delete else "forbidden",
+        ),
+        download=BaseRight(
+            value=can_read,
+            reason="Мод можно скачать" if can_read else "Скачивание скрыто",
+            reason_code="public" if can_read else "hidden",
+        ),
+    )
 
 
 @router.put(
@@ -101,149 +207,22 @@ async def mod(
     mod_id: int = Path(..., description="ID мода"),
 ) -> ModResponse:
     context = await manager_client.fetch_manager_context(request, mod_ids=[mod_id])
-    mod_entry = _mod_entry_by_id(context, mod_id)
-    muted = _is_muted(context)
-    is_admin = bool(context.admin)
-
-    can_read = False
-    can_edit = False
-    can_manage_authors = False
-    can_delete = False
-
-    if mod_entry is not None:
-        if is_admin:
-            can_read = True
-            can_edit = True
-            can_manage_authors = True
-            can_delete = True
-        else:
-            if mod_entry.owner or mod_entry.member or mod_entry.public <= 1:
-                can_read = True
-
-            if not muted:
-                if mod_entry.owner:
-                    can_edit = bool(context.change_self_mods)
-                elif mod_entry.member or mod_entry.public > 1:
-                    can_edit = False
-                else:
-                    can_edit = bool(context.change_mods)
-
-                if mod_entry.owner:
-                    can_manage_authors = not (
-                        payload.author_id is not None
-                        and payload.author_id == context.owner_id
-                        and payload.mode is False
-                    )
-                elif mod_entry.member:
-                    can_manage_authors = (
-                        payload.author_id is not None
-                        and payload.author_id == context.owner_id
-                        and payload.mode is False
-                    )
-                else:
-                    can_manage_authors = bool(context.change_authorship_mods)
-
-                if mod_entry.owner and context.delete_self_mods:
-                    can_delete = True
-                else:
-                    can_delete = bool(context.delete_mods)
-
-    edit_reason = "Администратор имеет доступ" if is_admin else "Доступ к модификации ограничен"
-    if mod_entry is not None and mod_entry.owner:
-        edit_reason = "Можно редактировать свой мод"
-    elif mod_entry is not None and not mod_entry.owner and not mod_entry.member and mod_entry.public <= 1:
-        edit_reason = "Можно редактировать публичный мод"
-    elif muted:
-        edit_reason = "Вы в муте"
-
-    edit_right = BaseRight(
-        value=can_edit,
-        reason=edit_reason,
-        reason_code="edit" if can_edit else "forbidden",
-    )
-
-    return ModResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
-        info=BaseRight(
-            value=can_read,
-            reason="Мод доступен для просмотра" if can_read else "Мод скрыт",
-            reason_code="public" if can_read else "hidden",
-        ),
-        edit=ModEditResponse(
-            title=edit_right,
-            description=edit_right,
-            short_description=edit_right,
-            screenshots=edit_right,
-            new_version=edit_right,
-            authors=BaseRight(
-                value=can_manage_authors,
-                reason=(
-                    "Можно управлять авторами"
-                    if can_manage_authors
-                    else "Управление авторами недоступно"
-                ),
-                reason_code="authors" if can_manage_authors else "forbidden",
-            ),
-            tags=edit_right,
-            dependencies=edit_right,
-        ),
-        delete=BaseRight(
-            value=can_delete,
-            reason="Можно удалить мод" if can_delete else "Удаление недоступно",
-            reason_code="delete" if can_delete else "forbidden",
-        ),
-        download=BaseRight(
-            value=can_read,
-            reason="Мод можно скачать" if can_read else "Скачивание скрыто",
-            reason_code="public" if can_read else "hidden",
-        ),
-    )
+    return _mod_response(context, mod_id, payload)
 
 
 @router.post(
     "/mods",
     summary="Get batch mod access permissions",
-    response_model=ModsResponse,
+    response_model=dict[int, ModResponse],
     response_model_exclude_none=True,
 )
 async def mods(
     request: Request,
     payload: ModsRequest,
-) -> ModsResponse:
+) -> dict[int, ModResponse]:
     context = await manager_client.fetch_manager_context(
         request,
         mod_ids=payload.mods_ids,
     )
     ids = list(dict.fromkeys(int(mod_id) for mod_id in payload.mods_ids))
-    allowed_ids: list[int] = []
-
-    if context.admin:
-        allowed_ids = ids
-    else:
-        muted = _is_muted(context)
-        for mod_id in ids:
-            mod_entry = _mod_entry_by_id(context, mod_id)
-            if mod_entry is None:
-                continue
-            if payload.edit and muted:
-                continue
-            if mod_entry.owner:
-                if payload.edit and not context.change_self_mods:
-                    continue
-                allowed_ids.append(mod_id)
-                continue
-            if mod_entry.member:
-                if payload.edit:
-                    continue
-                allowed_ids.append(mod_id)
-                continue
-            if mod_entry.public > 1:
-                continue
-            if payload.edit and not context.change_mods:
-                continue
-            allowed_ids.append(mod_id)
-
-    return ModsResponse(
-        **context.model_dump(exclude={"mods"}, exclude_none=True),
-        allowed_ids=allowed_ids,
-    )
+    return {mod_id: _mod_response(context, mod_id) for mod_id in ids}

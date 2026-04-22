@@ -198,12 +198,44 @@ Body:
 
 ```json
 {
-  "mods_ids": [1, 2, 3],
-  "edit": true
+  "mods_ids": [1, 2, 3]
 }
 ```
 
-Проверка идёт по активной сессии, а `mods_ids` нужен только чтобы вернуть права по конкретному набору модов.
+Ответ - объект вида `id -> fullstatus`, где значение для каждого ID совпадает со статусом из `POST /mod/{mod_id}`.
+
+Пример:
+
+```json
+{
+  "1": {
+    "info": {
+      "value": true,
+      "reason": "Мод доступен для просмотра",
+      "reason_code": "public"
+    },
+    "edit": {
+      "title": {
+        "value": true,
+        "reason": "Можно редактировать свой мод",
+        "reason_code": "edit"
+      }
+    },
+    "delete": {
+      "value": true,
+      "reason": "Можно удалить мод",
+      "reason_code": "delete"
+    },
+    "download": {
+      "value": true,
+      "reason": "Мод можно скачать",
+      "reason_code": "public"
+    }
+  }
+}
+```
+
+Проверка идёт по активной сессии, а `mods_ids` нужен только чтобы вернуть статусы по конкретному набору модов.
 
 ### `PATCH /tags`
 

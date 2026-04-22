@@ -117,7 +117,6 @@ class AccessEndpointTests(unittest.TestCase):
             "AccessContext",
             "SimpleCrudResponse",
             "ModAddResponse",
-            "ModsResponse",
             "GameAddResponse",
             "GameResponse",
             "ModResponse",
@@ -193,6 +192,7 @@ class AccessEndpointTests(unittest.TestCase):
             authenticated=False,
             owner_id=12,
             change_self_mods=True,
+            delete_self_mods=True,
             mods=[
                 make_mod(1, owner=True),
                 make_mod(2, public=0),
@@ -205,11 +205,18 @@ class AccessEndpointTests(unittest.TestCase):
             response = self.request(
                 "POST",
                 "/mods",
-                json={"mods_ids": [1, 2, 3], "edit": True},
+                json={"mods_ids": [1, 2, 3]},
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["allowed_ids"], [1])
+        body = response.json()
+        self.assertEqual(list(body.keys()), ["1", "2", "3"])
+        self.assertTrue(body["1"]["info"]["value"])
+        self.assertTrue(body["1"]["edit"]["title"]["value"])
+        self.assertTrue(body["1"]["delete"]["value"])
+        self.assertTrue(body["2"]["info"]["value"])
+        self.assertFalse(body["2"]["edit"]["title"]["value"])
+        self.assertFalse(body["2"]["delete"]["value"])
         self.assertEqual(fetch_mock.await_args.kwargs, {"mod_ids": [1, 2, 3]})
 
     def test_tags_and_genres_return_admin_crud_rights(self) -> None:

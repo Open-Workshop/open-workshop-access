@@ -35,6 +35,7 @@ class ModRequest(AccessModel):
 
 
 class ModsRequest(AccessModel):
+    user_id: int | None = None
     mods_ids: list[int] = Field(default_factory=list)
     edit: bool = False
 

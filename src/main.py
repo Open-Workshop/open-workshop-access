@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import datetime
-import logging
 
-from fastapi import Depends, FastAPI, HTTPException, Path, Request, status
+from fastapi import Depends, FastAPI, Path, Request
 
 import responses.body as RespBody
 from auth import require_service_token
@@ -17,9 +16,6 @@ from schemas import (
     ModsRequest,
 )
 
-logger = logging.getLogger("open_workshop.access")
-
-
 app = FastAPI(
     title="Open Workshop Access",
     contact={
@@ -32,18 +28,6 @@ app = FastAPI(
     },
     docs_url="/",
 )
-
-
-def _response_context(context: AccessState) -> AccessState:
-    if context.last_password_reset and context.password_change_available_at is None:
-        context.password_change_available_at = context.last_password_reset + datetime.timedelta(
-            minutes=5
-        )
-    if context.last_username_reset and context.username_change_available_at is None:
-        context.username_change_available_at = context.last_username_reset + datetime.timedelta(
-            days=30
-        )
-    return context
 
 
 def _is_muted(context: AccessState) -> bool:
@@ -85,10 +69,7 @@ async def context(
     payload: ContextRequest,
     _: None = Depends(require_service_token),
 ) -> AccessState:
-    context = _response_context(
-        await fetch_manager_context(request, user_id=payload.user_id)
-    )
-    return context
+    return await fetch_manager_context(request, user_id=payload.user_id)
 
 
 @app.put(
@@ -102,28 +83,38 @@ async def mod_add(
     payload: ModAddRequest,
     _: None = Depends(require_service_token),
 ) -> RespBody.ModAddResponse:
-    context = _response_context(await fetch_manager_context(request))
-    if not context.authenticated or context.owner_id < 0:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    context = await fetch_manager_context(request)
+    muted = _is_muted(context)
 
-    can_add = bool(context.admin)
-    if not can_add:
-        if payload.without_author:
-            can_add = False
-        elif _is_muted(context):
-            can_add = False
+    can_add = False
+    add_reason = "Требуется авторизация"
+    add_reason_code = "unauthorized"
+
+    if context.authenticated and context.owner_id >= 0:
+        if context.admin:
+            can_add = True
+            add_reason = "Администратор может публиковать моды"
+            add_reason_code = "admin"
+        elif payload.without_author:
+            add_reason = "Публикация без автора доступна только администратору"
+            add_reason_code = "admin_required"
+        elif muted:
+            add_reason = "Вы в муте"
+            add_reason_code = "muted"
+        elif context.publish_mods:
+            can_add = True
+            add_reason = "Можно публиковать моды"
+            add_reason_code = "allowed"
         else:
-            can_add = bool(context.publish_mods)
-
-    if not can_add:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+            add_reason = "Публикация модов недоступна"
+            add_reason_code = "forbidden"
 
     return RespBody.ModAddResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
         add=RespBody.BaseRight(
             can_add,
-            "Можно публиковать моды" if can_add else "Публикация модов недоступна",
-            "allowed" if can_add else "forbidden",
+            add_reason,
+            add_reason_code,
         ),
     )
 
@@ -140,7 +131,7 @@ async def mod(
     mod_id: int = Path(..., description="ID мода"),
     _: None = Depends(require_service_token),
 ) -> RespBody.ModResponse:
-    context = _response_context(await fetch_manager_context(request, mod_ids=[mod_id]))
+    context = await fetch_manager_context(request, mod_ids=[mod_id])
     mod = _mod_entry_by_id(context, mod_id)
     muted = _is_muted(context)
     is_admin = bool(context.admin)
@@ -200,6 +191,12 @@ async def mod(
     elif muted:
         edit_reason = "Вы в муте"
 
+    edit_right = RespBody.BaseRight(
+        can_edit,
+        edit_reason,
+        "edit" if can_edit else "forbidden",
+    )
+
     return RespBody.ModResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
         info=RespBody.BaseRight(
@@ -208,11 +205,11 @@ async def mod(
             "public" if can_read else "hidden",
         ),
         edit=RespBody.ModEditResponse(
-            title=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
-            description=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
-            short_description=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
-            screenshots=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
-            new_version=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
+            title=edit_right,
+            description=edit_right,
+            short_description=edit_right,
+            screenshots=edit_right,
+            new_version=edit_right,
             authors=RespBody.BaseRight(
                 can_manage_authors,
                 "Можно управлять авторами"
@@ -220,8 +217,8 @@ async def mod(
                 else "Управление авторами недоступно",
                 "authors" if can_manage_authors else "forbidden",
             ),
-            tags=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
-            dependencies=RespBody.BaseRight(can_edit, edit_reason, "edit" if can_edit else "forbidden"),
+            tags=edit_right,
+            dependencies=edit_right,
         ),
         delete=RespBody.BaseRight(
             can_delete,
@@ -247,8 +244,10 @@ async def mods(
     payload: ModsRequest,
     _: None = Depends(require_service_token),
 ) -> RespBody.ModsResponse:
-    context = _response_context(
-        await fetch_manager_context(request, mod_ids=payload.mods_ids)
+    context = await fetch_manager_context(
+        request,
+        user_id=payload.user_id,
+        mod_ids=payload.mods_ids,
     )
     ids = list(dict.fromkeys(int(mod_id) for mod_id in payload.mods_ids))
     allowed_ids: list[int] = []
@@ -295,7 +294,7 @@ async def tags(
     request: Request,
     _: None = Depends(require_service_token),
 ) -> RespBody.SimpleCrudResponse:
-    context = _response_context(await fetch_manager_context(request))
+    context = await fetch_manager_context(request)
     return _crud_response(context=context)
 
 
@@ -309,7 +308,7 @@ async def genres(
     request: Request,
     _: None = Depends(require_service_token),
 ) -> RespBody.SimpleCrudResponse:
-    context = _response_context(await fetch_manager_context(request))
+    context = await fetch_manager_context(request)
     return _crud_response(context=context)
 
 
@@ -323,7 +322,7 @@ async def game_add(
     request: Request,
     _: None = Depends(require_service_token),
 ) -> RespBody.GameAddResponse:
-    context = _response_context(await fetch_manager_context(request))
+    context = await fetch_manager_context(request)
     can_manage = bool(context.admin)
     return RespBody.GameAddResponse(
         **context.model_dump(exclude={"mods"}, exclude_none=True),
@@ -345,10 +344,10 @@ async def game_add(
 )
 async def game(
     request: Request,
-    game_id: int = Path(..., description="ID игры/приложения"),
+    _game_id: int = Path(..., description="ID игры/приложения"),
     _: None = Depends(require_service_token),
 ) -> RespBody.GameResponse:
-    context = _response_context(await fetch_manager_context(request))
+    context = await fetch_manager_context(request)
     can_manage = bool(context.admin)
     game_right = RespBody.BaseRight(
         can_manage,
@@ -384,17 +383,81 @@ async def profile(
     profile_id: int = Path(..., description="ID профиля"),
     _: None = Depends(require_service_token),
 ) -> RespBody.ProfileResponse:
-    context = _response_context(await fetch_manager_context(request))
+    context = await fetch_manager_context(request)
     now = datetime.datetime.now()
     is_self = context.owner_id >= 0 and context.owner_id == profile_id
     is_admin = bool(context.admin)
     muted = _is_muted(context)
+    username_on_cooldown = bool(
+        context.username_change_available_at
+        and context.username_change_available_at > now
+    )
 
-    if not context.authenticated or context.owner_id < 0:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        )
+    can_change_nickname = bool(
+        is_admin
+        or (is_self and context.change_username and not muted and not username_on_cooldown)
+    )
+    if is_admin:
+        nickname_right = RespBody.BaseRight(True, "Администратор может менять никнейм", "admin")
+    elif is_self and context.change_username and not muted and not username_on_cooldown:
+        nickname_right = RespBody.BaseRight(True, "Можно менять собственный никнейм", "self")
+    elif muted and is_self and context.change_username:
+        nickname_right = RespBody.BaseRight(False, "Вы в муте", "muted")
+    elif username_on_cooldown and is_self and context.change_username:
+        nickname_right = RespBody.BaseRight(False, "Никнейм пока нельзя менять", "cooldown")
+    else:
+        nickname_right = RespBody.BaseRight(False, "Изменение никнейма недоступно", "forbidden")
+
+    can_change_description = bool(is_admin or (is_self and context.change_about and not muted))
+    if is_admin:
+        description_right = RespBody.BaseRight(True, "Администратор может менять описание", "admin")
+    elif is_self and context.change_about and not muted:
+        description_right = RespBody.BaseRight(True, "Можно менять собственное описание", "self")
+    elif muted and is_self and context.change_about:
+        description_right = RespBody.BaseRight(False, "Вы в муте", "muted")
+    else:
+        description_right = RespBody.BaseRight(False, "Изменение описания недоступно", "forbidden")
+
+    can_change_avatar = bool(is_admin or (is_self and context.change_avatar and not muted))
+    if is_admin:
+        avatar_right = RespBody.BaseRight(True, "Администратор может менять аватар", "admin")
+    elif is_self and context.change_avatar and not muted:
+        avatar_right = RespBody.BaseRight(True, "Можно менять собственный аватар", "self")
+    elif muted and is_self and context.change_avatar:
+        avatar_right = RespBody.BaseRight(False, "Вы в муте", "muted")
+    else:
+        avatar_right = RespBody.BaseRight(False, "Изменение аватара недоступно", "forbidden")
+
+    can_vote_for_reputation = bool(context.vote_for_reputation and not muted)
+    vote_right = RespBody.BaseRight(
+        can_vote_for_reputation,
+        "Голосование за репутацию доступно"
+        if can_vote_for_reputation
+        else "Вы в муте"
+        if muted
+        else "Голосование за репутацию недоступно",
+        "allowed" if can_vote_for_reputation else "muted" if muted else "forbidden",
+    )
+    can_write_comments = bool(context.write_comments and not muted)
+    comments_right = RespBody.BaseRight(
+        can_write_comments,
+        "Комментирование доступно"
+        if can_write_comments
+        else "Вы в муте"
+        if muted
+        else "Комментирование недоступно",
+        "allowed" if can_write_comments else "muted" if muted else "forbidden",
+    )
+    can_set_reactions = bool(context.set_reactions and not muted)
+    reactions_right = RespBody.BaseRight(
+        can_set_reactions,
+        "Реакции доступны"
+        if can_set_reactions
+        else "Вы в муте"
+        if muted
+        else "Реакции недоступны",
+        "allowed" if can_set_reactions else "muted" if muted else "forbidden",
+    )
 
     return RespBody.ProfileResponse(
         **context.model_dump(
@@ -419,59 +482,14 @@ async def profile(
             ),
         ),
         edit=RespBody.ProfileEditResponse(
-            nickname=RespBody.BaseRight(
-                is_admin
-                or (
-                    is_self
-                    and bool(context.change_username)
-                    and not muted
-                    and not (
-                        context.username_change_available_at
-                        and context.username_change_available_at > now
-                    )
-                ),
-                "Администратор может менять никнейм"
-                if is_admin
-                else "Можно менять собственный никнейм"
-                if is_self and context.change_username
-                else "Изменение никнейма недоступно",
-                "admin"
-                if is_admin
-                else "self"
-                if is_self and context.change_username
-                else "forbidden",
-            ),
+            nickname=nickname_right,
             grade=RespBody.BaseRight(
                 is_admin,
                 "Администратор может менять грейд",
                 "admin" if is_admin else "forbidden",
             ),
-            description=RespBody.BaseRight(
-                is_admin or (is_self and bool(context.change_about) and not muted),
-                "Администратор может менять описание"
-                if is_admin
-                else "Можно менять собственное описание"
-                if is_self and context.change_about and not muted
-                else "Изменение описания недоступно",
-                "admin"
-                if is_admin
-                else "self"
-                if is_self and context.change_about and not muted
-                else "forbidden",
-            ),
-            avatar=RespBody.BaseRight(
-                is_admin or (is_self and bool(context.change_avatar) and not muted),
-                "Администратор может менять аватар"
-                if is_admin
-                else "Можно менять собственный аватар"
-                if is_self and context.change_avatar and not muted
-                else "Изменение аватара недоступно",
-                "admin"
-                if is_admin
-                else "self"
-                if is_self and context.change_avatar and not muted
-                else "forbidden",
-            ),
+            description=description_right,
+            avatar=avatar_right,
             mute=RespBody.BaseRight(
                 is_admin and not is_self,
                 "Администратор может назначать мут",
@@ -483,21 +501,9 @@ async def profile(
                 "admin" if is_admin else "forbidden",
             ),
         ),
-        vote_for_reputation=RespBody.BaseRight(
-            bool(context.vote_for_reputation) and not muted,
-            "Голосование за репутацию доступно",
-            "allowed" if context.vote_for_reputation and not muted else "muted",
-        ),
-        write_comments=RespBody.BaseRight(
-            bool(context.write_comments) and not muted,
-            "Комментирование доступно",
-            "allowed" if context.write_comments and not muted else "muted",
-        ),
-        set_reactions=RespBody.BaseRight(
-            bool(context.set_reactions) and not muted,
-            "Реакции доступны",
-            "allowed" if context.set_reactions and not muted else "muted",
-        ),
+        vote_for_reputation=vote_right,
+        write_comments=comments_right,
+        set_reactions=reactions_right,
         delete=RespBody.BaseRight(
             is_self,
             "Удалять можно только свой профиль",

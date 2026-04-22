@@ -16,15 +16,19 @@ from open_workshop_access.contracts.state import AccessState
 router = APIRouter()
 
 
-def _crud_response(context: AccessState) -> SimpleCrudResponse:
+def _admin_only_reason(can_manage: bool, allowed: str, denied: str) -> str:
+    return allowed if can_manage else denied
+
+
+def _crud_response(context: AccessState, subject: str) -> SimpleCrudResponse:
     public_context = context.to_public_context()
     can_manage = bool(context.admin)
     admin_right = BaseRight(
         value=can_manage,
-        reason=(
-            "Администратор может выполнять действие"
-            if can_manage
-            else "Требуются права администратора"
+        reason=_admin_only_reason(
+            can_manage,
+            f"Администратор может управлять {subject}.",
+            f"Для управления {subject} нужны права администратора.",
         ),
         reason_code="admin" if can_manage else "forbidden",
     )
@@ -44,7 +48,7 @@ def _crud_response(context: AccessState) -> SimpleCrudResponse:
 )
 async def tags(request: Request) -> SimpleCrudResponse:
     context = await manager_client.fetch_manager_context(request)
-    return _crud_response(context)
+    return _crud_response(context, "тегами")
 
 
 @router.patch(
@@ -55,7 +59,7 @@ async def tags(request: Request) -> SimpleCrudResponse:
 )
 async def genres(request: Request) -> SimpleCrudResponse:
     context = await manager_client.fetch_manager_context(request)
-    return _crud_response(context)
+    return _crud_response(context, "жанрами")
 
 
 @router.put(
@@ -72,10 +76,10 @@ async def game_add(request: Request) -> GameAddResponse:
         **public_context.model_dump(exclude_none=True),
         add=BaseRight(
             value=can_manage,
-            reason=(
-                "Администратор может добавлять игры"
-                if can_manage
-                else "Требуются права администратора"
+            reason=_admin_only_reason(
+                can_manage,
+                "Администратор может добавлять игры в каталог.",
+                "Для добавления игр в каталог нужны права администратора.",
             ),
             reason_code="admin" if can_manage else "forbidden",
         ),
@@ -98,10 +102,10 @@ async def game(
     can_manage = bool(context.admin)
     game_right = BaseRight(
         value=can_manage,
-        reason=(
-            "Администратор может менять игру"
-            if can_manage
-            else "Требуются права администратора"
+        reason=_admin_only_reason(
+            can_manage,
+            "Администратор может редактировать игру.",
+            "Для редактирования игры нужны права администратора.",
         ),
         reason_code="admin" if can_manage else "forbidden",
     )
@@ -117,10 +121,10 @@ async def game(
         ),
         delete=BaseRight(
             value=can_manage,
-            reason=(
-                "Администратор может удалять игру"
-                if can_manage
-                else "Требуются права администратора"
+            reason=_admin_only_reason(
+                can_manage,
+                "Администратор может удалять игру из каталога.",
+                "Для удаления игры из каталога нужны права администратора.",
             ),
             reason_code="admin" if can_manage else "forbidden",
         ),

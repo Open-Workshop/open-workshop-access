@@ -31,6 +31,109 @@ def _mod_entry_by_id(context: AccessState, mod_id: int) -> AccessModEntry | None
     return None
 
 
+def _mod_visibility_reason(context: AccessState, mod_entry: AccessModEntry | None, can_read: bool) -> str:
+    if can_read:
+        if context.admin:
+            return "Администратор может просматривать любой мод."
+        if mod_entry is not None:
+            if mod_entry.owner:
+                return "Вы можете просматривать свой мод."
+            if mod_entry.member:
+                return "Вы можете просматривать мод, где вы указаны соавтором."
+            if mod_entry.public <= 1:
+                return "Мод открыт для просмотра."
+        return "Мод открыт для просмотра."
+
+    if mod_entry is None:
+        return "Мод скрыт или недоступен для вашей учетной записи."
+
+    return "Этот мод скрыт для вашей учетной записи."
+
+
+def _mod_edit_reason(
+    context: AccessState,
+    mod_entry: AccessModEntry | None,
+    can_edit: bool,
+    muted: bool,
+) -> str:
+    if muted:
+        return "Редактирование мода временно недоступно из-за мьюта."
+    if context.admin:
+        return "Администратор может редактировать любой мод."
+    if mod_entry is not None:
+        if mod_entry.owner:
+            return "Вы можете редактировать свой мод." if can_edit else "У вас нет права редактировать свой мод."
+        if mod_entry.member:
+            return "Вы можете редактировать мод как соавтор." if can_edit else "У вас нет права редактировать этот мод как соавтор."
+    return "У вашей учетной записи нет права редактировать чужие моды."
+
+
+def _mod_authors_reason(
+    context: AccessState,
+    mod_entry: AccessModEntry | None,
+    payload: ModRequest | None,
+    can_manage_authors: bool,
+    muted: bool,
+) -> str:
+    if can_manage_authors:
+        if context.admin:
+            return "Администратор может управлять авторами любого мода."
+        if mod_entry is not None and mod_entry.owner:
+            return "Вы можете управлять авторами своего мода."
+        if mod_entry is not None and mod_entry.member:
+            return "Вы можете управлять авторами этого мода как соавтор."
+        return "Эта учетная запись может управлять авторами этого мода."
+
+    if muted:
+        return "Управление авторами мода временно недоступно из-за мьюта."
+
+    if (
+        mod_entry is not None
+        and mod_entry.owner
+        and payload is not None
+        and payload.author_id is not None
+        and payload.author_id == context.owner_id
+        and payload.mode is False
+    ):
+        return "Владельца нельзя удалять из списка авторов."
+
+    if mod_entry is not None and mod_entry.owner:
+        return "У вас нет права менять список авторов своего мода."
+    if mod_entry is not None and mod_entry.member:
+        return "У вас нет права менять список авторов этого мода как соавтор."
+    return "У вашей учетной записи нет права управлять авторами этого мода."
+
+
+def _mod_delete_reason(
+    context: AccessState,
+    mod_entry: AccessModEntry | None,
+    can_delete: bool,
+    muted: bool,
+) -> str:
+    if can_delete:
+        if context.admin:
+            return "Администратор может удалять любой мод."
+        if mod_entry is not None and mod_entry.owner:
+            return "Вы можете удалить свой мод."
+        return "Эта учетная запись может удалить этот мод."
+
+    if muted:
+        return "Удаление мода временно недоступно из-за мьюта."
+
+    if mod_entry is not None and mod_entry.owner:
+        return "У вас нет права удалить свой мод."
+
+    return "У вашей учетной записи нет права удалять этот мод."
+
+
+def _mod_download_reason(mod_entry: AccessModEntry | None, can_read: bool) -> str:
+    if can_read:
+        return "Мод доступен для скачивания."
+    if mod_entry is None:
+        return "Мод скрыт или недоступен для вашей учетной записи."
+    return "Этот мод скрыт для вашей учетной записи, поэтому скачивание недоступно."
+
+
 def _mod_response(
     context: AccessState,
     mod_id: int,
@@ -85,21 +188,9 @@ def _mod_response(
                 else:
                     can_delete = bool(context.delete_mods)
 
-    edit_reason = "Администратор имеет доступ" if is_admin else "Изменение мода недоступно"
-    if muted:
-        edit_reason = "Вы в муте"
-    elif mod_entry is not None and can_edit:
-        edit_reason = (
-            "Можно редактировать свой мод"
-            if mod_entry.owner
-            else "Можно редактировать чужой мод"
-        )
-    elif mod_entry is not None and mod_entry.owner:
-        edit_reason = "Редактирование своего мода недоступно"
-
     edit_right = BaseRight(
         value=can_edit,
-        reason=edit_reason,
+        reason=_mod_edit_reason(context, mod_entry, can_edit, muted),
         reason_code="edit" if can_edit else "forbidden",
     )
 
@@ -107,7 +198,7 @@ def _mod_response(
         **public_context.model_dump(exclude_none=True),
         info=BaseRight(
             value=can_read,
-            reason="Мод доступен для просмотра" if can_read else "Мод скрыт",
+            reason=_mod_visibility_reason(context, mod_entry, can_read),
             reason_code="public" if can_read else "hidden",
         ),
         edit=ModEditResponse(
@@ -118,11 +209,7 @@ def _mod_response(
             new_version=edit_right,
             authors=BaseRight(
                 value=can_manage_authors,
-                reason=(
-                    "Можно управлять авторами"
-                    if can_manage_authors
-                    else "Управление авторами недоступно"
-                ),
+                reason=_mod_authors_reason(context, mod_entry, payload, can_manage_authors, muted),
                 reason_code="authors" if can_manage_authors else "forbidden",
             ),
             tags=edit_right,
@@ -130,12 +217,12 @@ def _mod_response(
         ),
         delete=BaseRight(
             value=can_delete,
-            reason="Можно удалить мод" if can_delete else "Удаление недоступно",
+            reason=_mod_delete_reason(context, mod_entry, can_delete, muted),
             reason_code="delete" if can_delete else "forbidden",
         ),
         download=BaseRight(
             value=can_read,
-            reason="Мод можно скачать" if can_read else "Скачивание скрыто",
+            reason=_mod_download_reason(mod_entry, can_read),
             reason_code="public" if can_read else "hidden",
         ),
     )
@@ -155,32 +242,32 @@ async def mod_add(
     muted = _is_muted(context)
 
     can_add = False
-    add_reason = "Требуется авторизация"
+    add_reason = "Войдите в аккаунт, чтобы публиковать моды."
     add_reason_code = "unauthorized"
     can_add_anonymous = False
-    anonymous_add_reason = "Требуется авторизация"
+    anonymous_add_reason = "Войдите в аккаунт, чтобы публиковать мод без автора."
     anonymous_add_reason_code = "unauthorized"
 
     if context.authenticated and context.owner_id >= 0:
         if context.admin:
             can_add = True
-            add_reason = "Администратор может публиковать моды"
+            add_reason = "Администратор может публиковать моды."
             add_reason_code = "admin"
             can_add_anonymous = True
-            anonymous_add_reason = "Администратор может публиковать моды без автора"
+            anonymous_add_reason = "Администратор может публиковать моды без автора."
             anonymous_add_reason_code = "admin"
         elif muted:
-            add_reason = "Вы в муте"
+            add_reason = "Публикация модов временно запрещена из-за мьюта."
             add_reason_code = "muted"
         elif context.publish_mods:
             can_add = True
-            add_reason = "Можно публиковать моды"
+            add_reason = "Вы можете публиковать моды."
             add_reason_code = "allowed"
         else:
-            add_reason = "Публикация модов недоступна"
+            add_reason = "У вашей учетной записи нет права публиковать моды."
             add_reason_code = "forbidden"
         if not context.admin:
-            anonymous_add_reason = "Публикация без автора доступна только администратору"
+            anonymous_add_reason = "Публиковать мод без автора может только администратор."
             anonymous_add_reason_code = "admin_required"
 
     return ModAddResponse(

@@ -7,19 +7,19 @@ from open_workshop_access.contracts.state import ACCESS_CONTEXT_EXAMPLE, AccessC
 
 BASE_RIGHT_EXAMPLE = {
     "value": True,
-    "reason": "Можно публиковать моды",
+    "reason": "Это право доступно этой учетной записи",
     "reason_code": "allowed",
 }
 
 BASE_RIGHT_FORBIDDEN_EXAMPLE = {
     "value": False,
-    "reason": "Публикация без автора доступна только администратору",
+    "reason": "Для этого действия требуются дополнительные права",
     "reason_code": "admin_required",
 }
 
 CRUD_RIGHT_EXAMPLE = {
     "value": True,
-    "reason": "Администратор может выполнять действие",
+    "reason": "Администратор может управлять этим разделом",
     "reason_code": "admin",
 }
 

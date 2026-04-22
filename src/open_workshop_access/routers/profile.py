@@ -21,6 +21,10 @@ def _is_muted(context: AccessState) -> bool:
     return bool(context.mute_until and context.mute_until > datetime.datetime.now())
 
 
+def _forbidden_reason(action: str) -> str:
+    return f"У этой учетной записи нет права {action}."
+
+
 @router.post(
     "/profile/{profile_id}",
     summary="Get profile access permissions",
@@ -45,81 +49,81 @@ async def profile(
     if is_admin:
         nickname_right = BaseRight(
             value=True,
-            reason="Администратор может менять никнейм",
+            reason="Администратор может менять никнейм пользователя.",
             reason_code="admin",
         )
     elif is_self and context.change_username and not muted and not username_on_cooldown:
         nickname_right = BaseRight(
             value=True,
-            reason="Можно менять собственный никнейм",
+            reason="Вы можете менять свой никнейм.",
             reason_code="self",
         )
     elif muted and is_self and context.change_username:
         nickname_right = BaseRight(
             value=False,
-            reason="Вы в муте",
+            reason="Смена никнейма временно недоступна из-за мьюта.",
             reason_code="muted",
         )
     elif username_on_cooldown and is_self and context.change_username:
         nickname_right = BaseRight(
             value=False,
-            reason="Никнейм пока нельзя менять",
+            reason="Смена никнейма пока недоступна: после последнего изменения действует задержка.",
             reason_code="cooldown",
         )
     else:
         nickname_right = BaseRight(
             value=False,
-            reason="Изменение никнейма недоступно",
+            reason=_forbidden_reason("менять никнейм"),
             reason_code="forbidden",
         )
 
     if is_admin:
         description_right = BaseRight(
             value=True,
-            reason="Администратор может менять описание",
+            reason="Администратор может менять описание пользователя.",
             reason_code="admin",
         )
     elif is_self and context.change_about and not muted:
         description_right = BaseRight(
             value=True,
-            reason="Можно менять собственное описание",
+            reason="Вы можете менять своё описание.",
             reason_code="self",
         )
     elif muted and is_self and context.change_about:
         description_right = BaseRight(
             value=False,
-            reason="Вы в муте",
+            reason="Изменение описания временно недоступно из-за мьюта.",
             reason_code="muted",
         )
     else:
         description_right = BaseRight(
             value=False,
-            reason="Изменение описания недоступно",
+            reason=_forbidden_reason("менять описание"),
             reason_code="forbidden",
         )
 
     if is_admin:
         avatar_right = BaseRight(
             value=True,
-            reason="Администратор может менять аватар",
+            reason="Администратор может менять аватар пользователя.",
             reason_code="admin",
         )
     elif is_self and context.change_avatar and not muted:
         avatar_right = BaseRight(
             value=True,
-            reason="Можно менять собственный аватар",
+            reason="Вы можете менять свой аватар.",
             reason_code="self",
         )
     elif muted and is_self and context.change_avatar:
         avatar_right = BaseRight(
             value=False,
-            reason="Вы в муте",
+            reason="Изменение аватара временно недоступно из-за мьюта.",
             reason_code="muted",
         )
     else:
         avatar_right = BaseRight(
             value=False,
-            reason="Изменение аватара недоступно",
+            reason=_forbidden_reason("менять аватар"),
             reason_code="forbidden",
         )
 
@@ -127,11 +131,11 @@ async def profile(
     vote_right = BaseRight(
         value=can_vote_for_reputation,
         reason=(
-            "Голосование за репутацию доступно"
+            "Голосование за репутацию доступно этой учетной записи."
             if can_vote_for_reputation
-            else "Вы в муте"
+            else "Голосование за репутацию временно недоступно из-за мьюта."
             if muted
-            else "Голосование за репутацию недоступно"
+            else _forbidden_reason("голосовать за репутацию")
         ),
         reason_code="allowed" if can_vote_for_reputation else "muted" if muted else "forbidden",
     )
@@ -139,11 +143,11 @@ async def profile(
     comments_right = BaseRight(
         value=can_write_comments,
         reason=(
-            "Комментирование доступно"
+            "Комментирование доступно этой учетной записи."
             if can_write_comments
-            else "Вы в муте"
+            else "Комментирование временно недоступно из-за мьюта."
             if muted
-            else "Комментирование недоступно"
+            else _forbidden_reason("писать комментарии")
         ),
         reason_code="allowed" if can_write_comments else "muted" if muted else "forbidden",
     )
@@ -151,11 +155,11 @@ async def profile(
     reactions_right = BaseRight(
         value=can_set_reactions,
         reason=(
-            "Реакции доступны"
+            "Постановка реакций доступна этой учетной записи."
             if can_set_reactions
-            else "Вы в муте"
+            else "Постановка реакций временно недоступна из-за мьюта."
             if muted
-            else "Реакции недоступны"
+            else _forbidden_reason("ставить реакции")
         ),
         reason_code="allowed" if can_set_reactions else "muted" if muted else "forbidden",
     )
@@ -165,17 +169,17 @@ async def profile(
         info=ProfileInfoResponse(
             public=BaseRight(
                 value=True,
-                reason="Профиль доступен для просмотра",
+                reason="Профиль открыт для просмотра.",
                 reason_code="public",
             ),
             meta=BaseRight(
                 value=is_admin or is_self,
                 reason=(
-                    "Это ваш профиль"
+                    "Это ваш профиль, скрытые данные доступны."
                     if is_self
-                    else "Вы администратор"
+                    else "Вы администратор и видите скрытые данные профиля."
                     if is_admin
-                    else "Скрытая информация недоступна"
+                    else "Скрытые данные профиля недоступны этой учетной записи."
                 ),
                 reason_code="self" if is_self else "admin" if is_admin else "forbidden",
             ),
@@ -184,19 +188,25 @@ async def profile(
             nickname=nickname_right,
             grade=BaseRight(
                 value=is_admin,
-                reason="Администратор может менять грейд",
+                reason="Администратор может менять грейд пользователя.",
                 reason_code="admin" if is_admin else "forbidden",
             ),
             description=description_right,
             avatar=avatar_right,
             mute=BaseRight(
                 value=is_admin and not is_self,
-                reason="Администратор может назначать мут",
+                reason=(
+                    "Администратор может назначать мут пользователю."
+                    if is_admin and not is_self
+                    else "Администратор не может назначить мут своему профилю."
+                    if is_admin
+                    else "У этой учетной записи нет права назначать мут."
+                ),
                 reason_code="admin" if is_admin and not is_self else "forbidden",
             ),
             rights=BaseRight(
                 value=is_admin,
-                reason="Только администратор может менять права",
+                reason="Администратор может менять права пользователя.",
                 reason_code="admin" if is_admin else "forbidden",
             ),
         ),
@@ -205,7 +215,7 @@ async def profile(
         set_reactions=reactions_right,
         delete=BaseRight(
             value=is_self,
-            reason="Удалять можно только свой профиль",
+            reason="Вы можете удалить свой профиль." if is_self else "Удалить можно только свой профиль.",
             reason_code="self" if is_self else "forbidden",
         ),
     )

@@ -199,6 +199,11 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertFalse(body["anonymous_add"]["value"])
         self.assertEqual(body["add"]["reason_code"], "allowed")
         self.assertEqual(body["anonymous_add"]["reason_code"], "admin_required")
+        self.assertEqual(body["add"]["reason"], "Вы можете публиковать моды.")
+        self.assertEqual(
+            body["anonymous_add"]["reason"],
+            "Публиковать мод без автора может только администратор.",
+        )
 
     def test_mod_add_allows_anonymous_add_for_admin(self) -> None:
         context = make_context(admin=True)
@@ -229,6 +234,12 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertFalse(body["edit"]["authors"]["value"])
         self.assertTrue(body["delete"]["value"])
         self.assertTrue(body["download"]["value"])
+        self.assertEqual(body["edit"]["title"]["reason"], "Вы можете редактировать свой мод.")
+        self.assertEqual(
+            body["edit"]["authors"]["reason"],
+            "Владельца нельзя удалять из списка авторов.",
+        )
+        self.assertEqual(body["delete"]["reason"], "Вы можете удалить свой мод.")
 
     def test_mods_batch_uses_static_user_context(self) -> None:
         context = make_context(
@@ -320,6 +331,16 @@ class AccessEndpointTests(unittest.TestCase):
                 self.assertTrue(body["edit"]["value"])
                 self.assertTrue(body["delete"]["value"])
                 self.assertEqual(body["add"]["reason_code"], "admin")
+                if path == "/tags":
+                    self.assertEqual(
+                        body["add"]["reason"],
+                        "Администратор может управлять тегами.",
+                    )
+                else:
+                    self.assertEqual(
+                        body["add"]["reason"],
+                        "Администратор может управлять жанрами.",
+                    )
 
     def test_game_routes_return_admin_template(self) -> None:
         context = make_context(admin=False)
@@ -338,9 +359,21 @@ class AccessEndpointTests(unittest.TestCase):
                 if path == "/game":
                     self.assertFalse(body["add"]["value"])
                     self.assertEqual(body["add"]["reason_code"], "forbidden")
+                    self.assertEqual(
+                        body["add"]["reason"],
+                        "Для добавления игр в каталог нужны права администратора.",
+                    )
                 else:
                     self.assertFalse(body["edit"]["title"]["value"])
                     self.assertFalse(body["delete"]["value"])
+                    self.assertEqual(
+                        body["edit"]["title"]["reason"],
+                        "Для редактирования игры нужны права администратора.",
+                    )
+                    self.assertEqual(
+                        body["delete"]["reason"],
+                        "Для удаления игры из каталога нужны права администратора.",
+                    )
 
     def test_profile_self_returns_cooldown_reason(self) -> None:
         now = datetime.datetime.now()
@@ -357,6 +390,11 @@ class AccessEndpointTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["edit"]["nickname"]["reason_code"], "cooldown")
         self.assertEqual(body["delete"]["reason_code"], "self")
+        self.assertEqual(
+            body["edit"]["nickname"]["reason"],
+            "Смена никнейма пока недоступна: после последнего изменения действует задержка.",
+        )
+        self.assertEqual(body["delete"]["reason"], "Вы можете удалить свой профиль.")
 
     def test_profile_self_returns_mute_reasons(self) -> None:
         now = datetime.datetime.now()
@@ -381,6 +419,26 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertEqual(body["write_comments"]["reason_code"], "muted")
         self.assertEqual(body["set_reactions"]["reason_code"], "muted")
         self.assertTrue(body["delete"]["value"])
+        self.assertEqual(
+            body["edit"]["description"]["reason"],
+            "Изменение описания временно недоступно из-за мьюта.",
+        )
+        self.assertEqual(
+            body["edit"]["avatar"]["reason"],
+            "Изменение аватара временно недоступно из-за мьюта.",
+        )
+        self.assertEqual(
+            body["vote_for_reputation"]["reason"],
+            "Голосование за репутацию временно недоступно из-за мьюта.",
+        )
+        self.assertEqual(
+            body["write_comments"]["reason"],
+            "Комментирование временно недоступно из-за мьюта.",
+        )
+        self.assertEqual(
+            body["set_reactions"]["reason"],
+            "Постановка реакций временно недоступна из-за мьюта.",
+        )
 
     def test_profile_admin_can_manage_other_user(self) -> None:
         context = make_context(

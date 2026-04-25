@@ -276,6 +276,20 @@ class AccessEndpointTests(unittest.TestCase):
                 self.assertNotIn(leaked_field, mod_body)
         self.assertEqual(fetch_mock.await_args.kwargs, {"mod_ids": [1, 2, 3]})
 
+    def test_manager_callback_timeout_is_returned_as_gateway_timeout(self) -> None:
+        fetch_mock = AsyncMock(
+            side_effect=manager_client.ManagerCallbackError(
+                "Manager callback timed out",
+                status_code=504,
+            )
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", fetch_mock):
+            response = self.request("POST", "/mods", json={"mods_ids": [1]})
+
+        self.assertEqual(response.status_code, 504)
+        self.assertEqual(response.json(), {"detail": "Manager callback timed out"})
+
     def test_mod_access_is_not_tied_to_visibility(self) -> None:
         context = make_context(
             change_mods=True,

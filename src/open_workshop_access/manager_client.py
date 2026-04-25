@@ -58,8 +58,16 @@ async def fetch_manager_context(
             if body is not None:
                 post_kwargs["json"] = body
             response = await client.post(url, **post_kwargs)
+    except httpx.TimeoutException as exc:  # pragma: no cover - network timeout
+        raise ManagerCallbackError(
+            f"Manager callback timed out: {exc}",
+            status_code=504,
+        ) from exc
     except httpx.HTTPError as exc:  # pragma: no cover - network failure
-        raise ManagerCallbackError(f"Manager callback failed: {exc}") from exc
+        raise ManagerCallbackError(
+            f"Manager callback failed: {exc}",
+            status_code=502,
+        ) from exc
 
     if response.status_code >= 400:
         raise ManagerCallbackError(
@@ -70,6 +78,9 @@ async def fetch_manager_context(
     try:
         data = response.json()
     except ValueError as exc:  # pragma: no cover - invalid manager payload
-        raise ManagerCallbackError("Manager callback returned invalid JSON") from exc
+        raise ManagerCallbackError(
+            "Manager callback returned invalid JSON",
+            status_code=502,
+        ) from exc
 
     return AccessState.model_validate(data)

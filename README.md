@@ -21,6 +21,7 @@
 - расчёт динамических прав:
   - mute
   - cooldown на смену никнейма
+  - cooldown на смену пароля
   - публикация модов
   - редактирование модов
   - управление авторами
@@ -90,7 +91,7 @@ tests/
 
 | Переменная | По умолчанию | Назначение |
 | --- | --- | --- |
-| `MANAGER_URL` | `http://127.0.0.1:7776/api/accounts` | Базовый URL manager для trusted callback |
+| `MANAGER_URL` | `http://127.0.0.1:7776` | Базовый URL manager для trusted callback без path-prefix |
 | `ACCESS_CALLBACK_TOKEN` | `""` | Токен, которым access подписывает callback-запросы в manager |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | Таймаут callback-запроса к manager |
 | `LOG_LEVEL` | `INFO` | Уровень логирования |
@@ -107,7 +108,7 @@ python3 -m venv venv
 Пример локального запуска:
 
 ```bash
-export MANAGER_URL="http://127.0.0.1:7776/api/accounts"
+export MANAGER_URL="http://127.0.0.1:7776"
 export ACCESS_CALLBACK_TOKEN="dev-callback-token"
 
 ./venv/bin/granian --interface asgi --host 127.0.0.1 --port 8080 --working-dir src open_workshop_access:app
@@ -132,7 +133,7 @@ GET /
 Для получения статического контекста access вызывает manager:
 
 ```text
-POST {MANAGER_URL}/access/callback/context
+POST {MANAGER_URL}/internal/access/context
 ```
 
 С этим запросом отправляются:
@@ -275,6 +276,7 @@ Body не требуется.
 - редактирование описания
 - редактирование аватара
 - выдача мута
+- смена пароля
 - редактирование прав
 - голосование за репутацию
 - комментарии

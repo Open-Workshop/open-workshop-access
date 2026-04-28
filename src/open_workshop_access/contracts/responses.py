@@ -54,6 +54,7 @@ PROFILE_EDIT_RESPONSE_EXAMPLE = {
     "description": BASE_RIGHT_EXAMPLE,
     "avatar": BASE_RIGHT_EXAMPLE,
     "mute": CRUD_RIGHT_EXAMPLE,
+    "password": BASE_RIGHT_EXAMPLE,
     "rights": CRUD_RIGHT_EXAMPLE,
 }
 
@@ -190,6 +191,7 @@ class ProfileEditResponse(BaseModel):
     description: BaseRight
     avatar: BaseRight
     mute: BaseRight
+    password: BaseRight
     rights: BaseRight
 
 

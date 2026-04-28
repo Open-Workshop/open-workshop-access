@@ -45,6 +45,10 @@ async def profile(
         context.username_change_available_at
         and context.username_change_available_at > now
     )
+    password_on_cooldown = bool(
+        context.password_change_available_at
+        and context.password_change_available_at > now
+    )
 
     if is_admin:
         nickname_right = BaseRight(
@@ -127,6 +131,37 @@ async def profile(
             reason_code="forbidden",
         )
 
+    if is_admin and is_self:
+        password_right = BaseRight(
+            value=True,
+            reason="Администратор может менять свой пароль.",
+            reason_code="admin",
+        )
+    elif is_self and not muted and not password_on_cooldown:
+        password_right = BaseRight(
+            value=True,
+            reason="Вы можете менять свой пароль.",
+            reason_code="self",
+        )
+    elif muted and is_self:
+        password_right = BaseRight(
+            value=False,
+            reason="Смена пароля временно недоступна из-за мьюта.",
+            reason_code="muted",
+        )
+    elif password_on_cooldown and is_self:
+        password_right = BaseRight(
+            value=False,
+            reason="Смена пароля пока недоступна: после последнего изменения действует задержка.",
+            reason_code="cooldown",
+        )
+    else:
+        password_right = BaseRight(
+            value=False,
+            reason=_forbidden_reason("менять пароль"),
+            reason_code="forbidden",
+        )
+
     can_vote_for_reputation = bool(context.vote_for_reputation and not muted)
     vote_right = BaseRight(
         value=can_vote_for_reputation,
@@ -200,10 +235,13 @@ async def profile(
                     if is_admin and not is_self
                     else "Администратор не может назначить мут своему профилю."
                     if is_admin
+                    else "Нельзя назначить мут своему профилю."
+                    if is_self
                     else "У этой учетной записи нет права назначать мут."
                 ),
                 reason_code="admin" if is_admin and not is_self else "forbidden",
             ),
+            password=password_right,
             rights=BaseRight(
                 value=is_admin,
                 reason="Администратор может менять права пользователя.",

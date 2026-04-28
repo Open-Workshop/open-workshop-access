@@ -24,7 +24,7 @@ def _read_int(name: str, default: int) -> int:
     return default
 
 
-MANAGER_URL = _read_str("MANAGER_URL", "http://127.0.0.1:7776/api/accounts")
+MANAGER_URL = _read_str("MANAGER_URL", "http://127.0.0.1:7776")
 ACCESS_CALLBACK_TOKEN = _read_str("ACCESS_CALLBACK_TOKEN", "")
 REQUEST_TIMEOUT_SECONDS = _read_int("REQUEST_TIMEOUT_SECONDS", 30)
 LOG_LEVEL = _read_str("LOG_LEVEL", "INFO")

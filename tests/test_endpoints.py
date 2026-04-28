@@ -410,6 +410,25 @@ class AccessEndpointTests(unittest.TestCase):
         )
         self.assertEqual(body["delete"]["reason"], "Вы можете удалить свой профиль.")
 
+    def test_profile_self_returns_password_cooldown_reason(self) -> None:
+        now = datetime.datetime.now()
+        context = make_context(
+            owner_id=7,
+            last_password_reset=now,
+            password_change_available_at=now + datetime.timedelta(days=10),
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("POST", "/profile/7", json={})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["edit"]["password"]["reason_code"], "cooldown")
+        self.assertEqual(
+            body["edit"]["password"]["reason"],
+            "Смена пароля пока недоступна: после последнего изменения действует задержка.",
+        )
+
     def test_profile_self_returns_mute_reasons(self) -> None:
         now = datetime.datetime.now()
         context = make_context(
@@ -429,6 +448,8 @@ class AccessEndpointTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["edit"]["description"]["reason_code"], "muted")
         self.assertEqual(body["edit"]["avatar"]["reason_code"], "muted")
+        self.assertEqual(body["edit"]["mute"]["reason_code"], "forbidden")
+        self.assertEqual(body["edit"]["password"]["reason_code"], "muted")
         self.assertEqual(body["vote_for_reputation"]["reason_code"], "muted")
         self.assertEqual(body["write_comments"]["reason_code"], "muted")
         self.assertEqual(body["set_reactions"]["reason_code"], "muted")
@@ -440,6 +461,14 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertEqual(
             body["edit"]["avatar"]["reason"],
             "Изменение аватара временно недоступно из-за мьюта.",
+        )
+        self.assertEqual(
+            body["edit"]["mute"]["reason"],
+            "Нельзя назначить мут своему профилю.",
+        )
+        self.assertEqual(
+            body["edit"]["password"]["reason"],
+            "Смена пароля временно недоступна из-за мьюта.",
         )
         self.assertEqual(
             body["vote_for_reputation"]["reason"],

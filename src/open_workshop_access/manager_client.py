@@ -45,7 +45,7 @@ async def fetch_manager_context(
     if normalized_mod_ids:
         body = {"mods_ids": normalized_mod_ids}
 
-    url = config.MANAGER_URL.rstrip("/") + "/access/callback/context"
+    url = config.MANAGER_URL.rstrip("/") + "/internal/access/context"
     headers = {"Authorization": f"Bearer {config.ACCESS_CALLBACK_TOKEN}"}
     timeout = httpx.Timeout(float(config.REQUEST_TIMEOUT_SECONDS))
 

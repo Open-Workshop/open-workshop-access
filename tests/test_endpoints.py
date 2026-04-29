@@ -127,6 +127,12 @@ class AccessEndpointTests(unittest.TestCase):
             self.assertNotIn(leaked_field, body)
         self.assertEqual(fetch_mock.await_args.kwargs, {})
 
+    def test_healthz_returns_ok(self) -> None:
+        response = self.request("GET", "/healthz")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def test_public_context_projection_is_whitelist_only(self) -> None:
         now = datetime.datetime.now()
         context = make_context(

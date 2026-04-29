@@ -220,6 +220,11 @@ Body:
       "reason": "Мод доступен для просмотра",
       "reason_code": "public"
     },
+    "catalog": {
+      "value": true,
+      "reason": "Мод можно показывать в каталоге",
+      "reason_code": "catalog"
+    },
     "edit": {
       "title": {
         "value": true,

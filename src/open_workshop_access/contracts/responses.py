@@ -11,6 +11,12 @@ BASE_RIGHT_EXAMPLE = {
     "reason_code": "allowed",
 }
 
+CATALOG_RIGHT_EXAMPLE = {
+    "value": True,
+    "reason": "Мод можно показывать в каталоге",
+    "reason_code": "catalog",
+}
+
 BASE_RIGHT_FORBIDDEN_EXAMPLE = {
     "value": False,
     "reason": "Для этого действия требуются дополнительные права",
@@ -61,6 +67,7 @@ PROFILE_EDIT_RESPONSE_EXAMPLE = {
 MOD_RESPONSE_EXAMPLE = {
     **ACCESS_CONTEXT_EXAMPLE,
     "info": BASE_RIGHT_EXAMPLE,
+    "catalog": CATALOG_RIGHT_EXAMPLE,
     "edit": MOD_EDIT_RESPONSE_EXAMPLE,
     "delete": BASE_RIGHT_EXAMPLE,
     "download": BASE_RIGHT_EXAMPLE,
@@ -126,6 +133,7 @@ class ModResponse(AccessContext):
     model_config = ConfigDict(json_schema_extra={"example": MOD_RESPONSE_EXAMPLE})
 
     info: BaseRight
+    catalog: BaseRight
     edit: ModEditResponse
     delete: BaseRight
     download: BaseRight

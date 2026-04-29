@@ -50,6 +50,32 @@ def _mod_visibility_reason(context: AccessState, mod_entry: AccessModEntry | Non
     return "Этот мод скрыт для вашей учетной записи."
 
 
+def _mod_catalog_reason(
+    context: AccessState,
+    mod_entry: AccessModEntry | None,
+    can_catalog: bool,
+) -> str:
+    if can_catalog:
+        if context.admin:
+            return "Администратор может показывать любой мод в каталоге."
+        if mod_entry is not None:
+            if mod_entry.owner:
+                return "Вы можете показывать свой мод в каталоге."
+            if mod_entry.member:
+                return "Вы можете показывать мод в каталоге как соавтор."
+            if mod_entry.public == 0:
+                return "Мод можно показывать в каталоге."
+        return "Мод можно показывать в каталоге."
+
+    if mod_entry is None:
+        return "Мод скрыт или недоступен для вашей учетной записи."
+    if mod_entry.condition != 0:
+        return "Мод еще не готов для показа в каталоге."
+    if mod_entry.public > 0:
+        return "Этот мод скрыт из каталога для вашей учетной записи."
+    return "Этот мод скрыт из каталога для вашей учетной записи."
+
+
 def _mod_edit_reason(
     context: AccessState,
     mod_entry: AccessModEntry | None,
@@ -145,6 +171,7 @@ def _mod_response(
     is_admin = bool(context.admin)
 
     can_read = False
+    can_catalog = False
     can_edit = False
     can_manage_authors = False
     can_delete = False
@@ -152,12 +179,20 @@ def _mod_response(
     if mod_entry is not None:
         if is_admin:
             can_read = True
+            can_catalog = True
             can_edit = True
             can_manage_authors = True
             can_delete = True
         else:
             if mod_entry.owner or mod_entry.member or mod_entry.public <= 1:
                 can_read = True
+
+            if mod_entry.condition == 0 and (
+                mod_entry.owner
+                or mod_entry.member
+                or mod_entry.public == 0
+            ):
+                can_catalog = True
 
             if not muted:
                 if mod_entry.owner or mod_entry.member:
@@ -200,6 +235,11 @@ def _mod_response(
             value=can_read,
             reason=_mod_visibility_reason(context, mod_entry, can_read),
             reason_code="public" if can_read else "hidden",
+        ),
+        catalog=BaseRight(
+            value=can_catalog,
+            reason=_mod_catalog_reason(context, mod_entry, can_catalog),
+            reason_code="catalog" if can_catalog else "hidden",
         ),
         edit=ModEditResponse(
             title=edit_right,

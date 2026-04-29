@@ -274,7 +274,9 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertTrue(body["1"]["info"]["value"])
         self.assertTrue(body["1"]["edit"]["title"]["value"])
         self.assertTrue(body["1"]["delete"]["value"])
+        self.assertTrue(body["1"]["catalog"]["value"])
         self.assertTrue(body["2"]["info"]["value"])
+        self.assertTrue(body["2"]["catalog"]["value"])
         self.assertFalse(body["2"]["edit"]["title"]["value"])
         self.assertFalse(body["2"]["delete"]["value"])
         for mod_body in body.values():
@@ -308,8 +310,24 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertFalse(body["info"]["value"])
+        self.assertFalse(body["catalog"]["value"])
         self.assertTrue(body["edit"]["title"]["value"])
         self.assertEqual(body["edit"]["title"]["reason_code"], "edit")
+
+    def test_public_one_mod_stays_readable_but_not_catalog_visible(self) -> None:
+        context = make_context(
+            mods=[make_mod(9, public=1)],
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("POST", "/mod/9", json={})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["info"]["value"])
+        self.assertTrue(body["download"]["value"])
+        self.assertFalse(body["catalog"]["value"])
+        self.assertEqual(body["catalog"]["reason_code"], "hidden")
 
     def test_mods_batch_accepts_optional_author_context(self) -> None:
         context = make_context(

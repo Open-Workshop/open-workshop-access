@@ -39,11 +39,17 @@ async def fetch_manager_context(
     request: Request,
     *,
     mod_ids: list[int] | int | None = None,
+    modpack_ids: list[int] | int | None = None,
 ) -> AccessState:
     body: dict[str, object] | None = None
     normalized_mod_ids = _normalize_mod_ids(mod_ids)
-    if normalized_mod_ids:
-        body = {"mods_ids": normalized_mod_ids}
+    normalized_modpack_ids = _normalize_mod_ids(modpack_ids)
+    if normalized_mod_ids or normalized_modpack_ids:
+        body = {}
+        if normalized_mod_ids:
+            body["mods_ids"] = normalized_mod_ids
+        if normalized_modpack_ids:
+            body["modpacks_ids"] = normalized_modpack_ids
 
     url = config.MANAGER_URL.rstrip("/") + "/internal/access/context"
     headers = {"Authorization": f"Bearer {config.ACCESS_CALLBACK_TOKEN}"}

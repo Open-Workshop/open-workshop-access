@@ -40,6 +40,13 @@ MOD_EDIT_RESPONSE_EXAMPLE = {
     "dependencies": BASE_RIGHT_EXAMPLE,
 }
 
+MODPACK_EDIT_RESPONSE_EXAMPLE = {
+    "title": BASE_RIGHT_EXAMPLE,
+    "description": BASE_RIGHT_EXAMPLE,
+    "short_description": BASE_RIGHT_EXAMPLE,
+    "authors": BASE_RIGHT_EXAMPLE,
+}
+
 GAME_EDIT_RESPONSE_EXAMPLE = {
     "title": CRUD_RIGHT_EXAMPLE,
     "description": CRUD_RIGHT_EXAMPLE,
@@ -73,7 +80,21 @@ MOD_RESPONSE_EXAMPLE = {
     "download": BASE_RIGHT_EXAMPLE,
 }
 
+MODPACK_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "info": BASE_RIGHT_EXAMPLE,
+    "catalog": CATALOG_RIGHT_EXAMPLE,
+    "edit": MODPACK_EDIT_RESPONSE_EXAMPLE,
+    "delete": BASE_RIGHT_EXAMPLE,
+}
+
 MOD_ADD_RESPONSE_EXAMPLE = {
+    **ACCESS_CONTEXT_EXAMPLE,
+    "add": BASE_RIGHT_EXAMPLE,
+    "anonymous_add": BASE_RIGHT_FORBIDDEN_EXAMPLE,
+}
+
+MODPACK_ADD_RESPONSE_EXAMPLE = {
     **ACCESS_CONTEXT_EXAMPLE,
     "add": BASE_RIGHT_EXAMPLE,
     "anonymous_add": BASE_RIGHT_FORBIDDEN_EXAMPLE,
@@ -129,6 +150,15 @@ class ModEditResponse(BaseModel):
     dependencies: BaseRight
 
 
+class ModpackEditResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": MODPACK_EDIT_RESPONSE_EXAMPLE})
+
+    title: BaseRight
+    description: BaseRight
+    short_description: BaseRight
+    authors: BaseRight
+
+
 class ModResponse(AccessContext):
     model_config = ConfigDict(json_schema_extra={"example": MOD_RESPONSE_EXAMPLE})
 
@@ -139,8 +169,24 @@ class ModResponse(AccessContext):
     download: BaseRight
 
 
+class ModpackResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": MODPACK_RESPONSE_EXAMPLE})
+
+    info: BaseRight
+    catalog: BaseRight
+    edit: ModpackEditResponse
+    delete: BaseRight
+
+
 class ModAddResponse(AccessContext):
     model_config = ConfigDict(json_schema_extra={"example": MOD_ADD_RESPONSE_EXAMPLE})
+
+    add: BaseRight
+    anonymous_add: BaseRight
+
+
+class ModpackAddResponse(AccessContext):
+    model_config = ConfigDict(json_schema_extra={"example": MODPACK_ADD_RESPONSE_EXAMPLE})
 
     add: BaseRight
     anonymous_add: BaseRight

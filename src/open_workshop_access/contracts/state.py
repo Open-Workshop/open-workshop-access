@@ -14,6 +14,14 @@ ACCESS_MOD_ENTRY_EXAMPLE = {
     "member": False,
 }
 
+ACCESS_MODPACK_ENTRY_EXAMPLE = {
+    "modpack_id": 1,
+    "public": 0,
+    "condition": 0,
+    "owner": True,
+    "member": False,
+}
+
 ACCESS_CONTEXT_EXAMPLE = {
     "authenticated": True,
     "owner_id": 7,
@@ -38,6 +46,12 @@ ACCESS_STATE_EXAMPLE = {
     "change_mods": False,
     "delete_self_mods": True,
     "delete_mods": False,
+    "publish_modpacks": True,
+    "change_authorship_modpacks": False,
+    "change_self_modpacks": True,
+    "change_modpacks": False,
+    "delete_self_modpacks": True,
+    "delete_modpacks": False,
     "create_forums": True,
     "change_authorship_forums": False,
     "change_self_forums": True,
@@ -49,6 +63,7 @@ ACCESS_STATE_EXAMPLE = {
     "change_avatar": True,
     "vote_for_reputation": True,
     "mods": [ACCESS_MOD_ENTRY_EXAMPLE],
+    "modpacks": [ACCESS_MODPACK_ENTRY_EXAMPLE],
 }
 
 ACCESS_PUBLIC_CONTEXT_FIELDS: tuple[str, ...] = (
@@ -78,6 +93,20 @@ class AccessModEntry(AccessModel):
     )
 
     mod_id: int
+    public: int = 0
+    condition: int = 0
+    owner: bool = False
+    member: bool = False
+
+
+class AccessModpackEntry(AccessModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        extra="ignore",
+        json_schema_extra={"example": ACCESS_MODPACK_ENTRY_EXAMPLE},
+    )
+
+    modpack_id: int
     public: int = 0
     condition: int = 0
     owner: bool = False
@@ -123,6 +152,13 @@ class AccessState(AccessContext):
     delete_self_mods: bool = False
     delete_mods: bool = False
 
+    publish_modpacks: bool = False
+    change_authorship_modpacks: bool = False
+    change_self_modpacks: bool = False
+    change_modpacks: bool = False
+    delete_self_modpacks: bool = False
+    delete_modpacks: bool = False
+
     create_forums: bool = False
     change_authorship_forums: bool = False
     change_self_forums: bool = False
@@ -136,6 +172,7 @@ class AccessState(AccessContext):
     vote_for_reputation: bool = False
 
     mods: list[AccessModEntry] | None = None
+    modpacks: list[AccessModpackEntry] | None = None
 
     def to_public_context(self) -> AccessContext:
         public_payload = {

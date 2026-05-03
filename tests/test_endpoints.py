@@ -19,6 +19,7 @@ from open_workshop_access.app import app
 from open_workshop_access.contracts.state import (
     ACCESS_PUBLIC_CONTEXT_FIELDS,
     AccessModEntry,
+    AccessModpackEntry,
     AccessState,
 )
 
@@ -39,6 +40,12 @@ def make_context(**overrides) -> AccessState:
         "change_mods": False,
         "delete_self_mods": False,
         "delete_mods": False,
+        "publish_modpacks": False,
+        "change_authorship_modpacks": False,
+        "change_self_modpacks": False,
+        "change_modpacks": False,
+        "delete_self_modpacks": False,
+        "delete_modpacks": False,
         "create_forums": False,
         "change_authorship_forums": False,
         "change_self_forums": False,
@@ -50,6 +57,7 @@ def make_context(**overrides) -> AccessState:
         "change_avatar": False,
         "vote_for_reputation": False,
         "mods": None,
+        "modpacks": None,
     }
     payload.update(overrides)
     return AccessState(**payload)
@@ -70,6 +78,21 @@ def make_mod(
     )
 
 
+def make_modpack(
+    modpack_id: int,
+    *,
+    public: int = 0,
+    owner: bool = False,
+    member: bool = False,
+) -> AccessModpackEntry:
+    return AccessModpackEntry(
+        modpack_id=modpack_id,
+        public=public,
+        owner=owner,
+        member=member,
+    )
+
+
 INTERNAL_STATE_FIELDS = (
     "admin",
     "create_reactions",
@@ -80,6 +103,12 @@ INTERNAL_STATE_FIELDS = (
     "change_mods",
     "delete_self_mods",
     "delete_mods",
+    "publish_modpacks",
+    "change_authorship_modpacks",
+    "change_self_modpacks",
+    "change_modpacks",
+    "delete_self_modpacks",
+    "delete_modpacks",
     "create_forums",
     "change_authorship_forums",
     "change_self_forums",
@@ -90,6 +119,7 @@ INTERNAL_STATE_FIELDS = (
     "change_about",
     "change_avatar",
     "mods",
+    "modpacks",
 )
 
 PROFILE_EXPLICIT_RIGHT_FIELDS = (
@@ -174,9 +204,11 @@ class AccessEndpointTests(unittest.TestCase):
             "AccessContext",
             "SimpleCrudResponse",
             "ModAddResponse",
+            "ModpackAddResponse",
             "GameAddResponse",
             "GameResponse",
             "ModResponse",
+            "ModpackResponse",
         ):
             with self.subTest(schema=schema_name):
                 for leaked_field in (
@@ -223,6 +255,24 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertTrue(body["anonymous_add"]["value"])
         self.assertEqual(body["anonymous_add"]["reason_code"], "admin")
 
+    def test_modpack_add_returns_anonymous_add_right(self) -> None:
+        context = make_context(publish_modpacks=True)
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("PUT", "/modpack")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["add"]["value"])
+        self.assertFalse(body["anonymous_add"]["value"])
+        self.assertEqual(body["add"]["reason_code"], "allowed")
+        self.assertEqual(body["anonymous_add"]["reason_code"], "admin_required")
+        self.assertEqual(body["add"]["reason"], "Вы можете публиковать модпаки.")
+        self.assertEqual(
+            body["anonymous_add"]["reason"],
+            "Публиковать модпак без автора может только администратор.",
+        )
+
     def test_mod_access_returns_owner_and_author_rules(self) -> None:
         context = make_context(
             change_self_mods=True,
@@ -246,6 +296,30 @@ class AccessEndpointTests(unittest.TestCase):
             "Владельца нельзя удалять из списка авторов.",
         )
         self.assertEqual(body["delete"]["reason"], "Вы можете удалить свой мод.")
+
+    def test_modpack_access_returns_owner_and_author_rules(self) -> None:
+        context = make_context(
+            change_self_modpacks=True,
+            delete_self_modpacks=True,
+            modpacks=[make_modpack(10, owner=True)],
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("POST", "/modpack/10", json={"author_id": 7, "mode": False})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["info"]["value"])
+        self.assertTrue(body["edit"]["title"]["value"])
+        self.assertFalse(body["edit"]["authors"]["value"])
+        self.assertTrue(body["delete"]["value"])
+        self.assertNotIn("download", body)
+        self.assertEqual(body["edit"]["title"]["reason"], "Вы можете редактировать свой модпак.")
+        self.assertEqual(
+            body["edit"]["authors"]["reason"],
+            "Владельца нельзя удалять из списка авторов.",
+        )
+        self.assertEqual(body["delete"]["reason"], "Вы можете удалить свой модпак.")
 
     def test_mods_batch_uses_static_user_context(self) -> None:
         context = make_context(
@@ -284,6 +358,44 @@ class AccessEndpointTests(unittest.TestCase):
                 self.assertNotIn(leaked_field, mod_body)
         self.assertEqual(fetch_mock.await_args.kwargs, {"mod_ids": [1, 2, 3]})
 
+    def test_modpacks_batch_uses_static_user_context(self) -> None:
+        context = make_context(
+            authenticated=False,
+            owner_id=12,
+            change_self_modpacks=True,
+            delete_self_modpacks=True,
+            modpacks=[
+                make_modpack(1, owner=True),
+                make_modpack(2, public=0),
+                make_modpack(3, member=True),
+            ],
+        )
+        fetch_mock = AsyncMock(return_value=context)
+
+        with patch.object(manager_client, "fetch_manager_context", fetch_mock):
+            response = self.request(
+                "POST",
+                "/modpacks",
+                json={"modpacks_ids": [1, 2, 3]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(list(body.keys()), ["1", "2", "3"])
+        self.assertTrue(body["1"]["info"]["value"])
+        self.assertTrue(body["1"]["edit"]["title"]["value"])
+        self.assertTrue(body["1"]["delete"]["value"])
+        self.assertTrue(body["1"]["catalog"]["value"])
+        self.assertTrue(body["2"]["info"]["value"])
+        self.assertTrue(body["2"]["catalog"]["value"])
+        self.assertFalse(body["2"]["edit"]["title"]["value"])
+        self.assertFalse(body["2"]["delete"]["value"])
+        for modpack_body in body.values():
+            for leaked_field in INTERNAL_STATE_FIELDS + PROFILE_EXPLICIT_RIGHT_FIELDS:
+                self.assertNotIn(leaked_field, modpack_body)
+            self.assertNotIn("download", modpack_body)
+        self.assertEqual(fetch_mock.await_args.kwargs, {"modpack_ids": [1, 2, 3]})
+
     def test_manager_callback_timeout_is_returned_as_gateway_timeout(self) -> None:
         fetch_mock = AsyncMock(
             side_effect=manager_client.ManagerCallbackError(
@@ -314,6 +426,22 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertTrue(body["edit"]["title"]["value"])
         self.assertEqual(body["edit"]["title"]["reason_code"], "edit")
 
+    def test_modpack_access_is_not_tied_to_visibility(self) -> None:
+        context = make_context(
+            change_modpacks=True,
+            modpacks=[make_modpack(9, public=2)],
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("POST", "/modpack/9", json={})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["info"]["value"])
+        self.assertFalse(body["catalog"]["value"])
+        self.assertTrue(body["edit"]["title"]["value"])
+        self.assertEqual(body["edit"]["title"]["reason_code"], "edit")
+
     def test_public_one_mod_stays_readable_but_not_catalog_visible(self) -> None:
         context = make_context(
             mods=[make_mod(9, public=1)],
@@ -328,6 +456,21 @@ class AccessEndpointTests(unittest.TestCase):
         self.assertTrue(body["download"]["value"])
         self.assertFalse(body["catalog"]["value"])
         self.assertEqual(body["catalog"]["reason_code"], "hidden")
+
+    def test_public_one_modpack_stays_readable_but_not_catalog_visible(self) -> None:
+        context = make_context(
+            modpacks=[make_modpack(9, public=1)],
+        )
+
+        with patch.object(manager_client, "fetch_manager_context", AsyncMock(return_value=context)):
+            response = self.request("POST", "/modpack/9", json={})
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["info"]["value"])
+        self.assertFalse(body["catalog"]["value"])
+        self.assertEqual(body["catalog"]["reason_code"], "hidden")
+        self.assertNotIn("download", body)
 
     def test_mods_batch_accepts_optional_author_context(self) -> None:
         context = make_context(

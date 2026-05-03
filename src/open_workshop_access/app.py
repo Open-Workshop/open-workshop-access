@@ -7,6 +7,7 @@ from open_workshop_access import manager_client
 from open_workshop_access.routers.catalog import router as catalog_router
 from open_workshop_access.routers.context import router as context_router
 from open_workshop_access.routers.mods import router as mods_router
+from open_workshop_access.routers.modpacks import router as modpacks_router
 from open_workshop_access.routers.profile import router as profile_router
 
 
@@ -38,5 +39,6 @@ async def manager_callback_error_handler(request, exc):
 
 app.include_router(context_router)
 app.include_router(mods_router)
+app.include_router(modpacks_router)
 app.include_router(catalog_router)
 app.include_router(profile_router)

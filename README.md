@@ -2,11 +2,15 @@
 
 Сервис расчёта прав доступа для Open Workshop.
 
-Он не хранит собственное состояние сессии и не ходит напрямую в базы manager. Вместо этого сервис:
+Он не хранит долговременное состояние сессии и не ходит напрямую в базы manager. Вместо этого сервис:
 
 1. принимает запросы от клиента,
 2. по кукам `accessToken` и `refreshToken` запрашивает у manager доверенный статический контекст,
 3. собирает и возвращает контракт прав для конкретной ручки.
+
+Ответы manager callback кэшируются в памяти на короткий TTL. Одновременные
+одинаковые callback-запросы склеиваются: если первый запрос уже летит в
+manager, остальные ждут тот же результат.
 
 Сервис нужен для того, чтобы логика принятия решений по доступу жила отдельно от основного manager-репозитория и возвращала единый, явный ответ с полями:
 
@@ -18,6 +22,7 @@
 
 - HTTP API на `FastAPI`
 - доверенный callback в manager для получения статичного контекста
+- короткий in-memory cache callback-ответов manager
 - расчёт динамических прав:
   - mute
   - cooldown на смену никнейма
@@ -94,6 +99,7 @@ tests/
 | `MANAGER_URL` | `http://127.0.0.1:7776` | Базовый URL manager для trusted callback без path-prefix |
 | `ACCESS_CALLBACK_TOKEN` | `""` | Токен, которым access подписывает callback-запросы в manager |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | Таймаут callback-запроса к manager |
+| `MANAGER_CONTEXT_CACHE_TTL_SECONDS` | `1.0` | TTL in-memory кэша ответов manager callback; `0` отключает кэш |
 | `LOG_LEVEL` | `INFO` | Уровень логирования |
 
 ## Установка
@@ -140,9 +146,15 @@ POST {MANAGER_URL}/internal/access/context
 
 - заголовок `Authorization: Bearer <ACCESS_CALLBACK_TOKEN>`
 - куки `accessToken` и `refreshToken`, если они были в исходном запросе
-- body только с `mods_ids`, если access дополнительно запрашивает данные по модам
+- body только с `mods_ids`/`modpacks_ids`, если access дополнительно запрашивает данные по модам или модпакам
 
 Это важно: access не тащит в body лишние поля “на всякий случай”.
+
+Callback-ответы manager кэшируются per-process по точному ключу:
+`accessToken`, `refreshToken`, `mods_ids`, `modpacks_ids`. TTL задаётся через
+`MANAGER_CONTEXT_CACHE_TTL_SECONDS` и по умолчанию равен `1.0` секунды.
+Пока первый запрос с таким ключом выполняется, остальные запросы с тем же
+ключом ждут его результат вместо нового обращения в manager.
 
 ## Ручки
 

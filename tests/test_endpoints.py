@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import pathlib
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -127,6 +129,102 @@ PROFILE_EXPLICIT_RIGHT_FIELDS = (
     "set_reactions",
     "vote_for_reputation",
 )
+
+
+class ManagerContextCacheTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        manager_client._clear_manager_context_cache()
+
+    def tearDown(self) -> None:
+        manager_client._clear_manager_context_cache()
+
+    def make_request(
+        self,
+        *,
+        access_token: str = "access-token",
+        refresh_token: str = "refresh-token",
+    ):
+        return SimpleNamespace(
+            cookies={
+                "accessToken": access_token,
+                "refreshToken": refresh_token,
+            }
+        )
+
+    async def test_concurrent_requests_share_inflight_manager_callback(self) -> None:
+        request = self.make_request()
+        started = asyncio.Event()
+        release = asyncio.Event()
+        context = make_context(owner_id=15)
+
+        async def request_context(*args, **kwargs):
+            started.set()
+            await release.wait()
+            return context
+
+        request_mock = AsyncMock(side_effect=request_context)
+
+        with (
+            patch.object(manager_client.config, "MANAGER_CONTEXT_CACHE_TTL_SECONDS", 1.0),
+            patch.object(manager_client, "_request_manager_context", request_mock),
+        ):
+            first = asyncio.create_task(manager_client.fetch_manager_context(request))
+            await started.wait()
+            second = asyncio.create_task(manager_client.fetch_manager_context(request))
+            await asyncio.sleep(0)
+            release.set()
+            first_context, second_context = await asyncio.gather(first, second)
+
+        self.assertIs(first_context, context)
+        self.assertIs(second_context, context)
+        self.assertEqual(request_mock.await_count, 1)
+
+    async def test_successful_response_is_reused_until_ttl_expires(self) -> None:
+        request = self.make_request()
+        now = 100.0
+        contexts = [
+            make_context(owner_id=1),
+            make_context(owner_id=2),
+        ]
+        request_mock = AsyncMock(side_effect=contexts)
+
+        def monotonic() -> float:
+            return now
+
+        with (
+            patch.object(manager_client.config, "MANAGER_CONTEXT_CACHE_TTL_SECONDS", 1.0),
+            patch.object(manager_client, "monotonic", side_effect=monotonic),
+            patch.object(manager_client, "_request_manager_context", request_mock),
+        ):
+            first_context = await manager_client.fetch_manager_context(request)
+            second_context = await manager_client.fetch_manager_context(request)
+            now = 101.1
+            third_context = await manager_client.fetch_manager_context(request)
+
+        self.assertEqual(first_context.owner_id, 1)
+        self.assertIs(second_context, first_context)
+        self.assertEqual(third_context.owner_id, 2)
+        self.assertEqual(request_mock.await_count, 2)
+
+    async def test_cache_key_includes_requested_mod_ids(self) -> None:
+        request = self.make_request()
+        request_mock = AsyncMock(
+            side_effect=[
+                make_context(owner_id=1, mods=[make_mod(1)]),
+                make_context(owner_id=1, mods=[make_mod(2)]),
+            ]
+        )
+
+        with (
+            patch.object(manager_client.config, "MANAGER_CONTEXT_CACHE_TTL_SECONDS", 1.0),
+            patch.object(manager_client, "_request_manager_context", request_mock),
+        ):
+            first_context = await manager_client.fetch_manager_context(request, mod_ids=[1])
+            second_context = await manager_client.fetch_manager_context(request, mod_ids=[2])
+
+        self.assertEqual(first_context.mods[0].mod_id, 1)
+        self.assertEqual(second_context.mods[0].mod_id, 2)
+        self.assertEqual(request_mock.await_count, 2)
 
 
 class AccessEndpointTests(unittest.TestCase):

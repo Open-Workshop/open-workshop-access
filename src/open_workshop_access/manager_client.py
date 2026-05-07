@@ -1,10 +1,34 @@
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
+from threading import Lock
+from time import monotonic
+
 import httpx
 from fastapi import Request
 
 from open_workshop_access import settings as config
 from open_workshop_access.contracts.state import AccessState
+
+
+_ManagerContextCacheKey = tuple[str, str, tuple[int, ...], tuple[int, ...]]
+_ManagerContextInflightKey = tuple[int, _ManagerContextCacheKey]
+
+
+@dataclass(frozen=True)
+class _CachedManagerContext:
+    value: AccessState
+    expires_at: float
+
+
+_manager_context_cache: dict[_ManagerContextCacheKey, _CachedManagerContext] = {}
+_manager_context_inflight: dict[
+    _ManagerContextInflightKey,
+    asyncio.Task[AccessState],
+] = {}
+_manager_context_cache_lock = Lock()
+_manager_context_next_prune_at = 0.0
 
 
 class ManagerCallbackError(RuntimeError):
@@ -35,15 +59,70 @@ def _normalize_mod_ids(mod_ids: list[int] | int | None) -> list[int]:
     return [int(mod_id) for mod_id in mod_ids]
 
 
-async def fetch_manager_context(
+def _manager_context_cache_key(
     request: Request,
     *,
-    mod_ids: list[int] | int | None = None,
-    modpack_ids: list[int] | int | None = None,
+    normalized_mod_ids: list[int],
+    normalized_modpack_ids: list[int],
+) -> _ManagerContextCacheKey:
+    return (
+        request.cookies.get("accessToken", ""),
+        request.cookies.get("refreshToken", ""),
+        tuple(normalized_mod_ids),
+        tuple(normalized_modpack_ids),
+    )
+
+
+def _prune_expired_manager_contexts(now: float) -> None:
+    global _manager_context_next_prune_at
+
+    if now < _manager_context_next_prune_at:
+        return
+
+    for key, cached in list(_manager_context_cache.items()):
+        if cached.expires_at <= now:
+            del _manager_context_cache[key]
+    _manager_context_next_prune_at = now + 1.0
+
+
+def _clear_manager_context_cache() -> None:
+    global _manager_context_next_prune_at
+
+    with _manager_context_cache_lock:
+        _manager_context_cache.clear()
+        _manager_context_inflight.clear()
+        _manager_context_next_prune_at = 0.0
+
+
+def _remember_manager_context_result(
+    task: asyncio.Task[AccessState],
+    *,
+    cache_key: _ManagerContextCacheKey,
+    inflight_key: _ManagerContextInflightKey,
+    ttl: float,
+) -> None:
+    with _manager_context_cache_lock:
+        if _manager_context_inflight.get(inflight_key) is task:
+            del _manager_context_inflight[inflight_key]
+
+        if task.cancelled() or task.exception() is not None:
+            return
+
+        now = monotonic()
+        _prune_expired_manager_contexts(now)
+        _manager_context_cache[cache_key] = _CachedManagerContext(
+            value=task.result(),
+            expires_at=now + ttl,
+        )
+
+
+async def _request_manager_context(
+    request: Request,
+    *,
+    normalized_mod_ids: list[int],
+    normalized_modpack_ids: list[int],
 ) -> AccessState:
     body: dict[str, object] | None = None
-    normalized_mod_ids = _normalize_mod_ids(mod_ids)
-    normalized_modpack_ids = _normalize_mod_ids(modpack_ids)
     if normalized_mod_ids or normalized_modpack_ids:
         body = {}
         if normalized_mod_ids:
@@ -90,3 +169,58 @@ async def fetch_manager_context(
         ) from exc
 
     return AccessState.model_validate(data)
+
+
+async def fetch_manager_context(
+    request: Request,
+    *,
+    mod_ids: list[int] | int | None = None,
+    modpack_ids: list[int] | int | None = None,
+) -> AccessState:
+    normalized_mod_ids = _normalize_mod_ids(mod_ids)
+    normalized_modpack_ids = _normalize_mod_ids(modpack_ids)
+    ttl = float(config.MANAGER_CONTEXT_CACHE_TTL_SECONDS)
+    if ttl <= 0:
+        return await _request_manager_context(
+            request,
+            normalized_mod_ids=normalized_mod_ids,
+            normalized_modpack_ids=normalized_modpack_ids,
+        )
+
+    cache_key = _manager_context_cache_key(
+        request,
+        normalized_mod_ids=normalized_mod_ids,
+        normalized_modpack_ids=normalized_modpack_ids,
+    )
+    loop_id = id(asyncio.get_running_loop())
+    inflight_key = (loop_id, cache_key)
+
+    with _manager_context_cache_lock:
+        now = monotonic()
+        _prune_expired_manager_contexts(now)
+        cached = _manager_context_cache.get(cache_key)
+        if cached is not None and cached.expires_at > now:
+            return cached.value
+        if cached is not None:
+            del _manager_context_cache[cache_key]
+
+        task = _manager_context_inflight.get(inflight_key)
+        if task is None:
+            task = asyncio.create_task(
+                _request_manager_context(
+                    request,
+                    normalized_mod_ids=normalized_mod_ids,
+                    normalized_modpack_ids=normalized_modpack_ids,
+                )
+            )
+            _manager_context_inflight[inflight_key] = task
+            task.add_done_callback(
+                lambda completed_task: _remember_manager_context_result(
+                    completed_task,
+                    cache_key=cache_key,
+                    inflight_key=inflight_key,
+                    ttl=ttl,
+                )
+            )
+
+    return await asyncio.shield(task)
